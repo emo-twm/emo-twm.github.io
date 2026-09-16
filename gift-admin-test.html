@@ -105,7 +105,7 @@ const STORE_COLORS = {
 };
 
 const ZONE_PRE = 'iphone18';
-const ZONE_PRE_LABEL = 'iPhone 18 預購禮';
+const ZONE_PRE_LABEL = '🍎 預購禮';
 const ZONES = [{id:'general',label:'一般贈品'},{id:ZONE_PRE,label:ZONE_PRE_LABEL}];
 function giftZone(g){ return g.zone || 'general'; }
 function zoneLabel(z){ return (ZONES.find(x=>x.id===(z||'general'))||ZONES[0]).label; }
@@ -449,7 +449,7 @@ function renderModal() {
         <div class="form-group"><label class="form-label">贈品名稱</label><input class="form-input" id="m-name" value="${g.name}" placeholder="請輸入贈品名稱"></div>
         <div class="form-group"><label class="form-label">所屬專區</label>
           <select class="form-input" id="m-zone">${ZONES.map(z=>`<option value="${z.id}"${giftZone(g)===z.id?' selected':''}>${z.label}</option>`).join('')}</select>
-          <div style="font-size:11px;color:#999;margin-top:4px">選「${ZONE_PRE_LABEL}」的贈品只會出現在前台預購禮專區，不會混進一般贈品清單</div>
+          <div style="font-size:11px;color:#999;margin-top:4px">選「${ZONE_PRE_LABEL}」的贈品只會出現在前台 iPhone 18 早鳥預購禮專區，不會混進一般贈品清單</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div class="form-group"><label class="form-label">點數</label><input class="form-input" id="m-pts" type="number" value="${g.points}"></div>
@@ -488,7 +488,7 @@ function renderModal() {
           <select class="form-input" id="adj-store">${STORES.map(s=>`<option>${s}</option>`).join('')}</select>
         </div>
         <div class="form-group"><label class="form-label">贈品</label>
-          <select class="form-input" id="adj-gift">${state.gifts.map(g=>`<option value="${g.id}">${giftZone(g)===ZONE_PRE?'🍎 ':''}${g.name}</option>`).join('')}</select>
+          <select class="form-input" id="adj-gift">${state.gifts.map(g=>`<option value="${g.id}">${giftZone(g)===ZONE_PRE?'🍎 預購禮｜':''}${g.name}</option>`).join('')}</select>
         </div>
         <div class="form-group"><label class="form-label">異動數量（正數=補貨，負數=扣除）</label>
           <input class="form-input" id="adj-qty" type="number" value="0">

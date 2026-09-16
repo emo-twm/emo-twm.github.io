@@ -94,7 +94,8 @@ const STORE_COLORS = {
 };
 
 const ZONE_PRE = 'iphone18';
-const ZONE_PRE_LABEL = 'iPhone 18 預購禮';
+const ZONE_PRE_LABEL = 'iPhone 18 早鳥預購禮';
+const ZONE_PRE_TYPE = 'iPhone 18 早鳥預購禮';
 function giftZone(g){ return g.zone || 'general'; }
 function preZoneActive(){
   return state.gifts.some(g => giftZone(g)===ZONE_PRE && STORES.reduce((a,s)=>a+((g.stock&&g.stock[s])||0),0) > 0);
@@ -143,7 +144,7 @@ function renderStores() {
     ${isPre?`<div class="step-row" style="justify-content:center"><span class="step-current">⭕ 請選擇兌換門市</span></div>`:''}
     <div class="store-grid">
       ${STORES.map((s,i) => `<div class="store-card ${i===4?'solo':''}" data-action="selectStore" data-store="${s}" style="border-top:4px solid ${STORE_COLORS[s].text}">${s}店</div>`).join('')}
-      ${!isPre && preZoneActive() ? `<div class="store-card pre-card" data-action="selectZone" data-zone="${ZONE_PRE}">🍎 ${ZONE_PRE_LABEL}<small>預購 iPhone 18 的客人請點這裡</small></div>` : ''}
+      ${!isPre && preZoneActive() ? `<div class="store-card pre-card" data-action="selectZone" data-zone="${ZONE_PRE}">🍎 ${ZONE_PRE_LABEL}<small>iPhone 18 早鳥預購的客人請點這裡</small></div>` : ''}
     </div>
     ${isPre?`<button class="back-link" data-action="back">返回首頁</button>`:''}
   </div>`;
@@ -189,14 +190,14 @@ function renderGifts() {
   return `<div class="page">
     ${headerHtml()}
     <div class="step-row"><span class="step-done">✅ 已選 - ${state.selectedStore}店</span></div>
-    <div class="step-row"><span class="step-current">⭕ ${isPre?'請選擇您的 iPhone 18 預購禮':'你今天要換什麼贈品呢？'}</span></div>
+    <div class="step-row"><span class="step-current">⭕ ${isPre?'請選擇您的預購禮':'你今天要換什麼贈品呢？'}</span></div>
     <div class="gift-grid">
       ${paged.map(g => {
         const stock = (g.stock && g.stock[state.selectedStore]) || 0;
         const oos = stock === 0;
         const sel = state.selectedGift === g.id ? ' selected' : '';
         const url = imgUrl(g.image);
-        return '<div class="gift-card'+sel+(oos?' out-of-stock':'')+'" '+(oos?'':'data-action="selectGift"')+' data-gid="'+g.id+'"><div class="gift-img">'+(url?'<img src="'+url+'" alt="'+g.name+'" onerror="this.parentElement.innerHTML=\'<div class=no-img>🎁</div>\'">'  :'<div class="no-img">🎁</div>')+'<div class="gift-badges">'+(isPre?'<span class="badge-pre">預購禮</span>':'<span class="badge-pts">'+g.points+'點</span>')+'<span class="badge-val">'+g.value+'元</span>'+(oos?'<span class="badge-sold">已售完</span>':'')+'</div></div><div class="gift-info"><div class="gift-name">'+g.name+'</div><div class="gift-stock">庫存：'+stock+' 件</div></div></div>';
+        return '<div class="gift-card'+sel+(oos?' out-of-stock':'')+'" '+(oos?'':'data-action="selectGift"')+' data-gid="'+g.id+'"><div class="gift-img">'+(url?'<img src="'+url+'" alt="'+g.name+'" onerror="this.parentElement.innerHTML=\'<div class=no-img>🎁</div>\'">'  :'<div class="no-img">🎁</div>')+'<div class="gift-badges">'+(isPre?'':'<span class="badge-pts">'+g.points+'點</span>')+'<span class="badge-val">'+g.value+'元</span>'+(oos?'<span class="badge-sold">已售完</span>':'')+'</div></div><div class="gift-info"><div class="gift-name">'+g.name+'</div><div class="gift-stock">庫存：'+stock+' 件</div></div></div>';
       }).join('')}
     </div>
     ${pagination}
@@ -236,7 +237,7 @@ function renderSign() {
       <div style="font-size:16px;font-weight:700;margin:.75rem 0 .5rem;color:#2c2c2a">簽完名了嗎？跟店員說一下</div>
       <div class="form-group"><label class="form-label">請選擇類型</label>
         <select class="form-input" id="inp-type" ${isPre?'disabled':''}>
-          ${isPre?`<option selected>${ZONE_PRE_LABEL}</option>`:`<option value="">請選擇類型</option>
+          ${isPre?`<option selected>${ZONE_PRE_TYPE}</option>`:`<option value="">請選擇類型</option>
           <option>優質VIP</option><option>新辦/續約</option><option>點數兌換</option><option>其他</option>`}
         </select>
       </div>
@@ -308,7 +309,7 @@ async function handleAction(e) {
   else if(action === 'submitOrder') {
     const name = document.getElementById('inp-name').value.trim();
     const phone = document.getElementById('inp-phone').value.trim();
-    const type = state.zone===ZONE_PRE ? ZONE_PRE_LABEL : document.getElementById('inp-type').value;
+    const type = state.zone===ZONE_PRE ? ZONE_PRE_TYPE : document.getElementById('inp-type').value;
     const staff = document.getElementById('inp-staff').value.trim();
     const preorderNo = document.getElementById('inp-preorder')?.value.trim() || '';
     if(!name || !phone || !type || !staff) { alert('請填寫所有欄位'); return; }
