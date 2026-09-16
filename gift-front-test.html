@@ -235,12 +235,12 @@ function renderSign() {
         <button class="btn btn-sm" data-action="clearSig" style="margin-top:8px">重新簽名</button>
       </div>
       <div style="font-size:16px;font-weight:700;margin:.75rem 0 .5rem;color:#2c2c2a">簽完名了嗎？跟店員說一下</div>
-      <div class="form-group"><label class="form-label">請選擇類型</label>
-        <select class="form-input" id="inp-type" ${isPre?'disabled':''}>
-          ${isPre?`<option selected>${ZONE_PRE_TYPE}</option>`:`<option value="">請選擇類型</option>
-          <option>優質VIP</option><option>新辦/續約</option><option>點數兌換</option><option>其他</option>`}
+      ${isPre?'':`<div class="form-group"><label class="form-label">請選擇類型</label>
+        <select class="form-input" id="inp-type">
+          <option value="">請選擇類型</option>
+          <option>優質VIP</option><option>新辦/續約</option><option>點數兌換</option><option>其他</option>
         </select>
-      </div>
+      </div>`}
       <div class="form-group"><label class="form-label">店員編號</label><input class="form-input" id="inp-staff" type="text" placeholder="請輸入店員編號"></div>
       <button class="btn btn-primary" data-action="submitOrder" style="margin-top:.5rem" id="submit-btn">確認兌換</button>
       <button class="back-link" data-action="back">上一步</button>
@@ -309,7 +309,7 @@ async function handleAction(e) {
   else if(action === 'submitOrder') {
     const name = document.getElementById('inp-name').value.trim();
     const phone = document.getElementById('inp-phone').value.trim();
-    const type = state.zone===ZONE_PRE ? ZONE_PRE_TYPE : document.getElementById('inp-type').value;
+    const type = state.zone===ZONE_PRE ? ZONE_PRE_TYPE : (document.getElementById('inp-type')?.value || '');
     const staff = document.getElementById('inp-staff').value.trim();
     const preorderNo = document.getElementById('inp-preorder')?.value.trim() || '';
     if(!name || !phone || !type || !staff) { alert('請填寫所有欄位'); return; }
