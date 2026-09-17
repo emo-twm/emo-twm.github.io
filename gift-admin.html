@@ -328,6 +328,7 @@ function renderOrders() {
   if(state.filterStore && state.filterStore!=='全部') filtered=filtered.filter(o=>o.store===state.filterStore);
   if(state.filterDate) filtered=filtered.filter(o=>o.date===state.filterDate);
   if(state.filterZone) filtered=filtered.filter(o=>(o.zone||'general')===state.filterZone);
+  const isAdmin = state.currentUser?.role === 'admin';
   return `<div>
     <div class="section-title" style="margin-bottom:.75rem">兌換紀錄</div>
     <div class="filter-bar">
@@ -344,7 +345,7 @@ function renderOrders() {
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>日期</th><th>門市</th><th>贈品</th><th>數量</th><th>客戶</th><th>電話</th><th>預購單號</th><th>類型</th><th>店員</th><th>簽名</th></tr></thead>
+        <thead><tr><th>日期</th><th>門市</th><th>贈品</th><th>數量</th><th>客戶</th><th>電話</th><th>預購單號</th><th>類型</th><th>店員</th><th>簽名</th>${isAdmin?'<th>操作</th>':''}</tr></thead>
         <tbody>
           ${filtered.map(o=>`<tr>
             <td>${o.date}</td>
@@ -353,8 +354,9 @@ function renderOrders() {
             <td>${o.preorderNo||'—'}</td>
             <td><span class="tag">${o.type}</span></td><td>${o.staffId}</td>
             <td>${o.signature?`<img class="sig-img" src="${o.signature}" alt="簽名">`:'—'}</td>
+            ${isAdmin?`<td><button class="btn btn-sm btn-danger" data-action="deleteOrder" data-oid="${o.id}">刪除</button></td>`:''}
           </tr>`).join('')}
-          ${filtered.length===0?`<tr class="empty-row"><td colspan="10">暫無紀錄</td></tr>`:''}
+          ${filtered.length===0?`<tr class="empty-row"><td colspan="${isAdmin?11:10}">暫無紀錄</td></tr>`:''}
         </tbody>
       </table>
     </div>
@@ -568,6 +570,11 @@ async function handleAction(e) {
   else if(action==='deleteGift'){
     if(confirm('確定要刪除此贈品？')){
       await deleteDoc(doc(db,'gifts',e.currentTarget.dataset.gid));
+    }
+  }
+  else if(action==='deleteOrder'){
+    if(confirm('確定要刪除這筆兌換紀錄？刪除後無法復原，庫存不會自動加回。')){
+      await deleteDoc(doc(db,'orders',e.currentTarget.dataset.oid));
     }
   }
   else if(action==='saveGift'){
