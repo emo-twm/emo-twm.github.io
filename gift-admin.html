@@ -48,6 +48,12 @@ tr:last-child td{border-bottom:none}
 tr:hover td{background:#fafaf8}
 .store-badge{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600}
 .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;background:#f0f0ee;color:#666;font-weight:500}
+.zchip{display:inline-block;font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid #ddd;background:#fff;color:#aaa;font-weight:600;cursor:pointer;user-select:none;margin:2px 2px 2px 0;white-space:nowrap}
+.zchip.on.renew{background:#B5D4F4;border-color:#B5D4F4;color:#0C447C}
+.zchip.on.points{background:#C0DD97;border-color:#C0DD97;color:#27500A}
+.zchip.on.iphone18{background:#1c1c1a;border-color:#1c1c1a;color:#f5d67a}
+.zchip.static{cursor:default}
+.zchip-hint{font-size:11px;color:#999;margin:-4px 0 8px}
 .badge-pts{background:#dcfce7;color:#16a34a;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
 .badge-val{background:#fee2e2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
 .badge-pre{background:#1c1c1a;color:#f5d67a;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;white-space:nowrap}
@@ -106,10 +112,20 @@ const STORE_COLORS = {
 
 const ZONE_PRE = 'iphone18';
 const ZONE_PRE_LABEL = '🍎 預購禮';
-const ZONES = [{id:'general',label:'一般贈品'},{id:ZONE_PRE,label:ZONE_PRE_LABEL}];
-function giftZone(g){ return g.zone || 'general'; }
-function zoneLabel(z){ return (ZONES.find(x=>x.id===(z||'general'))||ZONES[0]).label; }
-function zoneTag(z){ return (z||'general')===ZONE_PRE?`<span class="badge-pre">🍎 預購禮</span>`:''; }
+const ZONES = [{id:'renew',label:'📱 申辦好禮'},{id:'points',label:'🪙 繳費集點'},{id:ZONE_PRE,label:ZONE_PRE_LABEL}];
+function giftZones(g){
+  if(Array.isArray(g.zones) && g.zones.length) return g.zones;
+  if(g.zone===ZONE_PRE) return [ZONE_PRE];
+  return []; // 尚未分類（前台會同時出現在續約與集點）
+}
+function isUntagged(g){ return !(Array.isArray(g.zones)&&g.zones.length) && g.zone!==ZONE_PRE; }
+function inZone(g,z){ return giftZones(g).includes(z); }
+function zoneLabel(z){ const f=ZONES.find(x=>x.id===z); return f?f.label:(z==='general'?'一般（舊紀錄）':z||''); }
+function zoneChips(g,editable){
+  return ZONES.map(z=>`<span class="zchip ${z.id} ${inZone(g,z.id)?'on':''} ${editable?'':'static'}" ${editable?`data-action="toggleZone" data-gid="${g.id}" data-zone="${z.id}"`:''}>${z.label}</span>`).join('')
+    + (isUntagged(g)?`<span class="tag">未分類</span>`:'');
+}
+function zoneTag(z){ return z===ZONE_PRE?`<span class="badge-pre">🍎 預購禮</span>`:(z==='renew'||z==='points')?`<span class="tag">${zoneLabel(z)}</span>`:''; }
 
 const DEFAULT_USERS = [
   {username:'00200',password:'00200',role:'admin',name:'許曉雯',store:'總部'},
@@ -271,7 +287,7 @@ function renderDashboard() {
 
 function renderGifts() {
   const perPage=25;
-  const list=state.giftFilterZone?state.gifts.filter(g=>giftZone(g)===state.giftFilterZone):state.gifts;
+  const list=state.giftFilterZone==='untagged'?state.gifts.filter(isUntagged):state.giftFilterZone?state.gifts.filter(g=>inZone(g,state.giftFilterZone)):state.gifts;
   const total=list.length;
   const totalPages=Math.max(1,Math.ceil(total/perPage));
   const page=Math.min(state.giftPage,totalPages);
@@ -295,18 +311,21 @@ function renderGifts() {
       <select class="filter-select" id="gfz">
         <option value="">全部專區</option>
         ${ZONES.map(z=>`<option value="${z.id}"${state.giftFilterZone===z.id?' selected':''}>${z.label}</option>`).join('')}
+        <option value="untagged"${state.giftFilterZone==='untagged'?' selected':''}>未分類</option>
       </select>
+      <span style="font-size:12px;color:#999;align-self:center">未分類：${state.gifts.filter(isUntagged).length} 款（直接點表格裡的標籤即可分類，一款可勾多區）</span>
     </div>
     ${paginationBar}
     <div class="table-wrap">
       <table>
-        <thead><tr><th>圖片</th><th>贈品名稱</th><th>點數</th><th>價值</th>${STORES.map(s=>`<th>${s}</th>`).join('')}<th>操作</th></tr></thead>
+        <thead><tr><th>圖片</th><th>贈品名稱</th><th>專區</th><th>點數</th><th>價值</th>${STORES.map(s=>`<th>${s}</th>`).join('')}<th>操作</th></tr></thead>
         <tbody>
           ${paged.map(g=>{
             const url=imgUrl(g.image);
             return `<tr>
               <td>${url?`<img src="${url}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid #eee" onerror="this.style.display='none'">`:'<div style="width:48px;height:48px;border-radius:8px;background:#f0f0ee;display:flex;align-items:center;justify-content:center;font-size:20px">🎁</div>'}</td>
-              <td style="font-weight:600">${g.name} ${zoneTag(g.zone)}</td>
+              <td style="font-weight:600">${g.name}</td>
+              <td style="min-width:150px">${zoneChips(g,true)}</td>
               <td><span class="badge-pts">${g.points}點</span></td>
               <td>${g.value}元</td>
               ${STORES.map(s=>`<td style="color:${(g.stock?.[s]||0)===0?'#dc2626':''};font-weight:${(g.stock?.[s]||0)===0?'600':''}">${g.stock?.[s]||0}</td>`).join('')}
@@ -316,7 +335,7 @@ function renderGifts() {
               </td>
             </tr>`;
           }).join('')}
-          ${list.length===0?`<tr class="empty-row"><td colspan="${5+STORES.length}">尚無贈品，請新增</td></tr>`:''}
+          ${list.length===0?`<tr class="empty-row"><td colspan="${6+STORES.length}">尚無贈品，請新增</td></tr>`:''}
         </tbody>
       </table>
     </div>${pagination}
@@ -335,6 +354,7 @@ function renderOrders() {
       <select class="filter-select" id="fz">
         <option value="">全部專區</option>
         ${ZONES.map(z=>`<option value="${z.id}"${state.filterZone===z.id?' selected':''}>${z.label}</option>`).join('')}
+        <option value="general"${state.filterZone==='general'?' selected':''}>一般（舊紀錄）</option>
       </select>
       <select class="filter-select" id="fs">
         <option value="">全部門市</option>
@@ -410,7 +430,7 @@ function renderStores() {
         <tbody>
           ${state.gifts.map(g=>{
             const total=STORES.reduce((a,s)=>a+(g.stock?.[s]||0),0);
-            return `<tr><td style="font-weight:600">${g.name} ${zoneTag(g.zone)}</td>${STORES.map(s=>`<td style="color:${(g.stock?.[s]||0)===0?'#dc2626':''};">${g.stock?.[s]||0}</td>`).join('')}<td style="font-weight:600">${total}</td></tr>`;
+            return `<tr><td style="font-weight:600">${g.name} ${zoneChips(g,false)}</td>${STORES.map(s=>`<td style="color:${(g.stock?.[s]||0)===0?'#dc2626':''};">${g.stock?.[s]||0}</td>`).join('')}<td style="font-weight:600">${total}</td></tr>`;
           }).join('')}
           ${state.gifts.length===0?`<tr class="empty-row"><td colspan="${STORES.length+2}">尚無贈品</td></tr>`:''}
         </tbody>
@@ -450,8 +470,8 @@ function renderModal() {
         <div class="modal-title">${state.modal==='editGift'?'編輯贈品':'新增贈品'}</div>
         <div class="form-group"><label class="form-label">贈品名稱</label><input class="form-input" id="m-name" value="${g.name}" placeholder="請輸入贈品名稱"></div>
         <div class="form-group"><label class="form-label">所屬專區</label>
-          <select class="form-input" id="m-zone">${ZONES.map(z=>`<option value="${z.id}"${giftZone(g)===z.id?' selected':''}>${z.label}</option>`).join('')}</select>
-          <div style="font-size:11px;color:#999;margin-top:4px">選「${ZONE_PRE_LABEL}」的贈品只會出現在前台 iPhone 18 早鳥預購禮專區，不會混進一般贈品清單</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 0">${ZONES.map(z=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer"><input type="checkbox" class="m-zone" value="${z.id}" ${inZone(g,z.id)?'checked':''}> ${z.label}</label>`).join('')}</div>
+          <div style="font-size:11px;color:#999;margin-top:2px">可複選。勾「🍎 預購禮」的只會出現在前台預購禮專區；都不勾的話前台續約與集點兩個分頁都會顯示</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div class="form-group"><label class="form-label">點數</label><input class="form-input" id="m-pts" type="number" value="${g.points}"></div>
@@ -490,7 +510,7 @@ function renderModal() {
           <select class="form-input" id="adj-store">${STORES.map(s=>`<option>${s}</option>`).join('')}</select>
         </div>
         <div class="form-group"><label class="form-label">贈品</label>
-          <select class="form-input" id="adj-gift">${state.gifts.map(g=>`<option value="${g.id}">${giftZone(g)===ZONE_PRE?'🍎 預購禮｜':''}${g.name}</option>`).join('')}</select>
+          <select class="form-input" id="adj-gift">${state.gifts.map(g=>`<option value="${g.id}">${inZone(g,ZONE_PRE)?'🍎 預購禮｜':''}${g.name}</option>`).join('')}</select>
         </div>
         <div class="form-group"><label class="form-label">異動數量（正數=補貨，負數=扣除）</label>
           <input class="form-input" id="adj-qty" type="number" value="0">
@@ -572,6 +592,13 @@ async function handleAction(e) {
       await deleteDoc(doc(db,'gifts',e.currentTarget.dataset.gid));
     }
   }
+  else if(action==='toggleZone'){
+    const g=state.gifts.find(x=>x.id===e.currentTarget.dataset.gid); if(!g) return;
+    const z=e.currentTarget.dataset.zone;
+    let zones=[...giftZones(g)];
+    zones = zones.includes(z) ? zones.filter(x=>x!==z) : [...zones,z];
+    await updateDoc(doc(db,'gifts',g.id),{zones, zone: zones.includes(ZONE_PRE)?ZONE_PRE:'general'});
+  }
   else if(action==='deleteOrder'){
     if(confirm('確定要刪除這筆兌換紀錄？刪除後無法復原，庫存不會自動加回。')){
       await deleteDoc(doc(db,'orders',e.currentTarget.dataset.oid));
@@ -585,11 +612,12 @@ async function handleAction(e) {
     STORES.forEach(s=>{stock[s]=parseInt(document.getElementById('m-s-'+s).value)||0;});
     if(!name){alert('請填寫贈品名稱');return;}
     const image = document.getElementById('m-img-url')?.value.trim() || state.editingGift?.image || '';
-    const zone = document.getElementById('m-zone')?.value || 'general';
+    const zones = [...document.querySelectorAll('.m-zone:checked')].map(c=>c.value);
+    const zone = zones.includes(ZONE_PRE)?ZONE_PRE:'general';
     if(state.modal==='editGift'){
-      await updateDoc(doc(db,'gifts',state.editingGift.id),{name,points:pts,value:val,stock,image,zone});
+      await updateDoc(doc(db,'gifts',state.editingGift.id),{name,points:pts,value:val,stock,image,zones,zone});
     } else {
-      await addDoc(collection(db,'gifts'),{name,points:pts,value:val,stock,image,zone});
+      await addDoc(collection(db,'gifts'),{name,points:pts,value:val,stock,image,zones,zone});
     }
     state.modal=null;state.editingGift=null;render();
   }
