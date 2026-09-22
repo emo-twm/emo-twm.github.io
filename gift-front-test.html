@@ -13,10 +13,11 @@ body{font-family:'Noto Sans TC',sans-serif;background:#f8f7f4;min-height:100vh}
 .main-title{font-size:22px;font-weight:700;color:#2c2c2a;line-height:1.5}
 .step-row{display:flex;align-items:center;gap:8px;margin:.4rem 0;font-size:14px}
 .tab-bar{display:flex;gap:8px;margin:.75rem 0 .25rem;background:#e9e7e0;padding:5px;border-radius:14px}
-.tab-btn{flex:1;text-align:center;padding:11px 8px;border-radius:10px;font-size:15px;font-weight:700;color:#666;cursor:pointer;user-select:none;transition:all .15s}
-.tab-btn.active{background:#fff;color:#1c1c1a;box-shadow:0 2px 6px rgba(0,0,0,.08)}
-.tab-btn.points.active{color:#1e5e3a}
-.tab-btn.renew.active{color:#0C447C}
+.tab-btn{flex:1;text-align:center;padding:13px 8px;border-radius:10px;font-size:16px;font-weight:700;color:#888;cursor:pointer;user-select:none;transition:all .15s;border:2px solid transparent}
+.tab-btn.active{color:#fff;box-shadow:0 3px 8px rgba(0,0,0,.15)}
+.tab-btn.renew.active{background:#0C447C;border-color:#0C447C}
+.tab-btn.points.active{background:#27500A;border-color:#27500A}
+.tab-icon{height:26px;width:26px;vertical-align:-7px;margin-right:6px;object-fit:contain}
 .step-done{color:#1d9e75}
 .step-current{color:#888}
 .store-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:1.25rem}
@@ -109,7 +110,7 @@ const STORE_COLORS = {
 const ZONE_PRE = 'iphone18';
 const ZONE_PRE_LABEL = 'iPhone 18 早鳥預購禮';
 const ZONE_PRE_TYPE = 'iPhone 18 早鳥預購禮';
-const TABS = [{id:'renew',label:'一般續約',type:'新辦/續約'},{id:'points',label:'繳費集點',type:'點數兌換'}];
+const TABS = [{id:'renew',label:'📱 申辦好禮',type:'門號申辦'},{id:'points',label:'繳費集點',icon:'icon-集點.png',type:'點數兌換'}];
 function giftZones(g){
   if(Array.isArray(g.zones) && g.zones.length) return g.zones;
   if(g.zone===ZONE_PRE) return [ZONE_PRE];
@@ -211,7 +212,7 @@ function renderGifts() {
   return `<div class="page">
     ${headerHtml()}
     <div class="step-row"><span class="step-done">✅ 已選 - ${state.selectedStore}店</span></div>
-    ${isPre?'':`<div class="tab-bar">${TABS.map(t=>`<div class="tab-btn ${t.id} ${state.tab===t.id?'active':''}" data-action="selectTab" data-tab="${t.id}">${t.label}</div>`).join('')}</div>`}
+    ${isPre?'':`<div class="tab-bar">${TABS.map(t=>`<div class="tab-btn ${t.id} ${state.tab===t.id?'active':''}" data-action="selectTab" data-tab="${t.id}">${t.icon?`<img class="tab-icon" src="${imgUrl(t.icon)}" alt="">`:''}${t.label}</div>`).join('')}</div>`}
     <div class="step-row"><span class="step-current">⭕ ${isPre?'請選擇您的預購禮':'你今天要換什麼贈品呢？'}</span></div>
     <div class="gift-grid">
       ${paged.map(g => {
@@ -257,9 +258,9 @@ function renderSign() {
         <button class="btn btn-sm" data-action="clearSig" style="margin-top:8px">重新簽名</button>
       </div>
       <div style="font-size:16px;font-weight:700;margin:.75rem 0 .5rem;color:#2c2c2a">簽完名了嗎？跟店員說一下</div>
-      ${isPre?'':`<div class="form-group"><label class="form-label">請選擇類型</label>
+      ${(isPre||state.tab==='points')?'':`<div class="form-group"><label class="form-label">請選擇類型</label>
         <select class="form-input" id="inp-type">
-          ${['優質VIP','新辦/續約','點數兌換','其他'].map(t=>`<option${t===(TABS.find(x=>x.id===state.tab)||{}).type?' selected':''}>${t}</option>`).join('')}
+          ${['優質VIP','門號申辦','其他'].map(t=>`<option${t==='門號申辦'?' selected':''}>${t}</option>`).join('')}
         </select>
       </div>`}
       <div class="form-group"><label class="form-label">店員編號</label><input class="form-input" id="inp-staff" type="text" placeholder="請輸入店員編號"></div>
@@ -347,7 +348,7 @@ async function handleAction(e) {
   else if(action === 'submitOrder') {
     const name = document.getElementById('inp-name').value.trim();
     const phone = document.getElementById('inp-phone').value.trim();
-    const type = state.zone===ZONE_PRE ? ZONE_PRE_TYPE : (document.getElementById('inp-type')?.value || '');
+    const type = state.zone===ZONE_PRE ? ZONE_PRE_TYPE : state.tab==='points' ? '點數兌換' : (document.getElementById('inp-type')?.value || '門號申辦');
     const staff = document.getElementById('inp-staff').value.trim();
     const preorderNo = document.getElementById('inp-preorder')?.value.trim() || '';
     if(!name || !phone || !type || !staff) { alert('請填寫所有欄位'); return; }

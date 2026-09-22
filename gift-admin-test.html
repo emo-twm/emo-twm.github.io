@@ -112,7 +112,7 @@ const STORE_COLORS = {
 
 const ZONE_PRE = 'iphone18';
 const ZONE_PRE_LABEL = '🍎 預購禮';
-const ZONES = [{id:'renew',label:'一般續約'},{id:'points',label:'繳費集點'},{id:ZONE_PRE,label:ZONE_PRE_LABEL}];
+const ZONES = [{id:'renew',label:'📱 申辦好禮'},{id:'points',label:'🪙 繳費集點'},{id:ZONE_PRE,label:ZONE_PRE_LABEL}];
 function giftZones(g){
   if(Array.isArray(g.zones) && g.zones.length) return g.zones;
   if(g.zone===ZONE_PRE) return [ZONE_PRE];
@@ -122,7 +122,7 @@ function isUntagged(g){ return !(Array.isArray(g.zones)&&g.zones.length) && g.zo
 function inZone(g,z){ return giftZones(g).includes(z); }
 function zoneLabel(z){ const f=ZONES.find(x=>x.id===z); return f?f.label:(z==='general'?'一般（舊紀錄）':z||''); }
 function zoneChips(g,editable){
-  return ZONES.map(z=>`<span class="zchip ${z.id} ${inZone(g,z.id)?'on':''} ${editable?'':'static'}" ${editable?`data-action="toggleZone" data-gid="${g.id}" data-zone="${z.id}"`:''}>${z.id===ZONE_PRE?'🍎 ':''}${z.label}</span>`).join('')
+  return ZONES.map(z=>`<span class="zchip ${z.id} ${inZone(g,z.id)?'on':''} ${editable?'':'static'}" ${editable?`data-action="toggleZone" data-gid="${g.id}" data-zone="${z.id}"`:''}>${z.label}</span>`).join('')
     + (isUntagged(g)?`<span class="tag">未分類</span>`:'');
 }
 function zoneTag(z){ return z===ZONE_PRE?`<span class="badge-pre">🍎 預購禮</span>`:(z==='renew'||z==='points')?`<span class="tag">${zoneLabel(z)}</span>`:''; }
@@ -470,7 +470,7 @@ function renderModal() {
         <div class="modal-title">${state.modal==='editGift'?'編輯贈品':'新增贈品'}</div>
         <div class="form-group"><label class="form-label">贈品名稱</label><input class="form-input" id="m-name" value="${g.name}" placeholder="請輸入贈品名稱"></div>
         <div class="form-group"><label class="form-label">所屬專區</label>
-          <div style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 0">${ZONES.map(z=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer"><input type="checkbox" class="m-zone" value="${z.id}" ${inZone(g,z.id)?'checked':''}> ${z.id===ZONE_PRE?'🍎 ':''}${z.label}</label>`).join('')}</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;padding:6px 0">${ZONES.map(z=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer"><input type="checkbox" class="m-zone" value="${z.id}" ${inZone(g,z.id)?'checked':''}> ${z.label}</label>`).join('')}</div>
           <div style="font-size:11px;color:#999;margin-top:2px">可複選。勾「🍎 預購禮」的只會出現在前台預購禮專區；都不勾的話前台續約與集點兩個分頁都會顯示</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
