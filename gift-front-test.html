@@ -12,6 +12,11 @@ body{font-family:'Noto Sans TC',sans-serif;background:#f8f7f4;min-height:100vh}
 .logo-circle{width:56px;height:56px;border-radius:50%;background:#2c2c2a;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;margin-bottom:.75rem}
 .main-title{font-size:22px;font-weight:700;color:#2c2c2a;line-height:1.5}
 .step-row{display:flex;align-items:center;gap:8px;margin:.4rem 0;font-size:14px}
+.tab-bar{display:flex;gap:8px;margin:.75rem 0 .25rem;background:#e9e7e0;padding:5px;border-radius:14px}
+.tab-btn{flex:1;text-align:center;padding:11px 8px;border-radius:10px;font-size:15px;font-weight:700;color:#666;cursor:pointer;user-select:none;transition:all .15s}
+.tab-btn.active{background:#fff;color:#1c1c1a;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.tab-btn.points.active{color:#1e5e3a}
+.tab-btn.renew.active{color:#0C447C}
 .step-done{color:#1d9e75}
 .step-current{color:#888}
 .store-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:1.25rem}
@@ -104,9 +109,15 @@ const STORE_COLORS = {
 const ZONE_PRE = 'iphone18';
 const ZONE_PRE_LABEL = 'iPhone 18 早鳥預購禮';
 const ZONE_PRE_TYPE = 'iPhone 18 早鳥預購禮';
-function giftZone(g){ return g.zone || 'general'; }
+const TABS = [{id:'renew',label:'一般續約',type:'新辦/續約'},{id:'points',label:'繳費集點',type:'點數兌換'}];
+function giftZones(g){
+  if(Array.isArray(g.zones) && g.zones.length) return g.zones;
+  if(g.zone===ZONE_PRE) return [ZONE_PRE];
+  return ['renew','points']; // 尚未分類的舊贈品，兩個分頁都顯示
+}
+function inZone(g,z){ return giftZones(g).includes(z); }
 function preZoneActive(){
-  return state.gifts.some(g => giftZone(g)===ZONE_PRE && STORES.reduce((a,s)=>a+((g.stock&&g.stock[s])||0),0) > 0);
+  return state.gifts.some(g => inZone(g,ZONE_PRE) && STORES.reduce((a,s)=>a+((g.stock&&g.stock[s])||0),0) > 0);
 }
 function headerHtml(){
   return `<div class="logo-area">
@@ -118,6 +129,7 @@ function headerHtml(){
 let state = {
   view: 'stores',
   zone: 'general',
+  tab: 'renew',
   selectedStore: null,
   selectedGift: null,
   selectedQty: 1,
@@ -179,7 +191,8 @@ function renderGifts() {
     'BeautyFlow沙龍級負離子護髮吹風機':57,'AirChef 7L大容量智能氣炸鍋':58,
     'SteamPro專業級蒸氣手掛掛燙機':59,'TravelPro 28吋大容量鋁框行李箱':60,
   };
-  const sorted = state.gifts.filter(g => giftZone(g)===state.zone).sort((a,b)=>{
+  const curZone = state.zone===ZONE_PRE ? ZONE_PRE : state.tab;
+  const sorted = state.gifts.filter(g => inZone(g,curZone)).sort((a,b)=>{
     const oa = a.order || ORDER_MAP[a.name] || 999;
     const ob = b.order || ORDER_MAP[b.name] || 999;
     return oa - ob;
@@ -198,6 +211,7 @@ function renderGifts() {
   return `<div class="page">
     ${headerHtml()}
     <div class="step-row"><span class="step-done">✅ 已選 - ${state.selectedStore}店</span></div>
+    ${isPre?'':`<div class="tab-bar">${TABS.map(t=>`<div class="tab-btn ${t.id} ${state.tab===t.id?'active':''}" data-action="selectTab" data-tab="${t.id}">${t.label}</div>`).join('')}</div>`}
     <div class="step-row"><span class="step-current">⭕ ${isPre?'請選擇您的預購禮':'你今天要換什麼贈品呢？'}</span></div>
     <div class="gift-grid">
       ${paged.map(g => {
@@ -245,8 +259,7 @@ function renderSign() {
       <div style="font-size:16px;font-weight:700;margin:.75rem 0 .5rem;color:#2c2c2a">簽完名了嗎？跟店員說一下</div>
       ${isPre?'':`<div class="form-group"><label class="form-label">請選擇類型</label>
         <select class="form-input" id="inp-type">
-          <option value="">請選擇類型</option>
-          <option>優質VIP</option><option>新辦/續約</option><option>點數兌換</option><option>其他</option>
+          ${['優質VIP','新辦/續約','點數兌換','其他'].map(t=>`<option${t===(TABS.find(x=>x.id===state.tab)||{}).type?' selected':''}>${t}</option>`).join('')}
         </select>
       </div>`}
       <div class="form-group"><label class="form-label">店員編號</label><input class="form-input" id="inp-staff" type="text" placeholder="請輸入店員編號"></div>
@@ -265,7 +278,7 @@ function renderDone() {
         <div class="main-title">V姐姐獨家送很大<br>贈品兌換平台</div>
       </div>
       <div class="pre-done" style="text-align:center;margin-top:.5rem">
-        <div class="success-icon">✦</div>
+        <div class="success-icon">🍎</div>
         <div class="pre-title">早鳥預購禮兌換完成</div>
         <div class="pre-sub">感謝您搶先預購 iPhone 18<br>這份禮物是 V姐姐專屬為您準備的</div>
         <div class="pre-gift">${state.selectedStore}店　<b>${gift?.name || ''}</b> × ${state.selectedQty}</div>
@@ -312,7 +325,8 @@ function attachEvents() {
 async function handleAction(e) {
   const action = e.currentTarget.dataset.action;
   if(action === 'selectZone') { state.zone = e.currentTarget.dataset.zone; state.view = 'stores'; render(); }
-  else if(action === 'selectStore') { state.selectedStore = e.currentTarget.dataset.store; state.view = 'gifts'; state.giftPage = 1; render(); }
+  else if(action === 'selectStore') { state.selectedStore = e.currentTarget.dataset.store; state.view = 'gifts'; state.giftPage = 1; state.tab = 'renew'; state.selectedGift = null; render(); }
+  else if(action === 'selectTab') { state.tab = e.currentTarget.dataset.tab; state.giftPage = 1; state.selectedGift = null; state.selectedQty = 1; render(); }
   else if(action === 'selectGift') { state.selectedGift = e.currentTarget.dataset.gid; state.selectedQty = 1; render(); }
   else if(action === 'qtyMinus') { if(state.selectedQty > 1) { state.selectedQty--; render(); } }
   else if(action === 'qtyPlus') {
@@ -357,7 +371,7 @@ async function handleAction(e) {
         timestamp: new Date().toISOString(),
         staffId: staff,
         type,
-        zone: state.zone,
+        zone: state.zone===ZONE_PRE ? ZONE_PRE : state.tab,
         preorderNo,
         signature: sig
       });
