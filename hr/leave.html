@@ -315,11 +315,11 @@ COL.onSnapshot(sn=>{
 }, e=>alert('連不上雲端資料庫：'+e.message));
 
 const STORES={
-  '鼎山':{c:'--ding',t:'--ding-t',staff:['劉家妘','陳亭安','高琦茗','凃彥州','林文怡']},
+  '鼎山':{c:'--ding',t:'--ding-t',staff:['劉家妘','陳亭安','凃彥州','蔡冠廷']},
   '陽明':{c:'--yang',t:'--yang-t',staff:['劉芳廷','邱雨蔚','林庭逸']},
   '後昌':{c:'--hou', t:'--hou-t', staff:['郭家維','黃閔聖','秦曼芯']},
-  '仁雄':{c:'--ren', t:'--ren-t', staff:['黃傑稜','郭紳鴻','石佳穎','蔡冠廷']},
-  '凱旋':{c:'--kai', t:'--kai-t', staff:['陳宛姍','黃子珊','林瑞献','劉宗翰']},
+  '仁雄':{c:'--ren', t:'--ren-t', staff:['黃傑稜','郭紳鴻','高琦茗']},
+  '凱旋':{c:'--kai', t:'--kai-t', staff:['陳宛姍','黃子珊','林瑞献','劉宗翰','林文怡']},
   '區督導':{c:'--sup',t:'--sup-t',staff:['黃庭鈞']},
   '總部':{c:'--hq', t:'--hq-t', staff:['姚東妍','廖宛如','曾芳新']}
 };
@@ -335,6 +335,11 @@ const parse=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
 const days=(a,b)=>Math.round((parse(b)-parse(a))/86400000)+1;
 /* 去姓，取後兩字：黃閔聖→閔聖、林庭逸→庭逸；複姓或兩字名原樣保留 */
 const shortName=n=>n.length>=3?n.slice(-2):n;
+/* 人員調店後，舊紀錄仍算同一人：一律用名單上的現職店點；
+   已離職（名單上沒有）的人才沿用當初登記的店點 */
+const ROSTER={};
+Object.keys(STORES).forEach(s=>STORES[s].staff.forEach(n=>ROSTER[n]=s));
+const storeOf=r=>ROSTER[r.name]||r.store;
 
 function recs(){
   return DB.all().sort((x,y)=>x.from.localeCompare(y.from));
@@ -371,11 +376,12 @@ function draw(){
       const dw=new Date(year,m,d).getDay();
       const isNow=thisYear&&now.getMonth()===m&&now.getDate()===d;
       const pills=(map[key(year,m,d)]||[]).map(r=>{
-        const bg=cvar(STORES[r.store].c),tx=cvar(STORES[r.store].t);
+        const st=storeOf(r);
+        const bg=cvar(STORES[st].c),tx=cvar(STORES[st].t);
         const pend=(r.status||'已核准')==='申請中';
         return `<span class="pill${pend?' pend':''}" style="${pend?`color:${tx};border-color:${tx}`:`background:${bg};color:${tx}`}"
-          title="${r.store}　${r.name}　${r.from} ～ ${r.to}（${days(r.from,r.to)}天）${r.kind}　${r.status||'已核准'}${r.note?'　'+r.note:''}"
-          ><b>${r.store}</b>${shortName(r.name)}</span>`;
+          title="${st}　${r.name}　${r.from} ～ ${r.to}（${days(r.from,r.to)}天）${r.kind}　${r.status||'已核准'}${r.note?'　'+r.note:''}"
+          ><b>${st}</b>${shortName(r.name)}</span>`;
       }).join('');
       cells+=`<div class="cell ${dw===0?'sun':dw===6?'sat':''} ${isNow?'now':''}">
         <span class="dn">${d}</span>${pills}</div>`;
@@ -400,8 +406,8 @@ function draw(){
   /* 年度次數 */
   const agg={};
   list.forEach(r=>{
-    const k=r.store+'／'+r.name;
-    agg[k]=agg[k]||{store:r.store,name:r.name,times:0,days:0,abroad:0,ok:0,pend:0};
+    const k=r.name;
+    agg[k]=agg[k]||{store:storeOf(r),name:r.name,times:0,days:0,abroad:0,ok:0,pend:0};
     agg[k].times++;agg[k].days+=days(r.from,r.to);
     if(r.kind==='出國') agg[k].abroad++;
     if((r.status||'已核准')==='申請中') agg[k].pend++; else agg[k].ok++;
@@ -428,10 +434,11 @@ function draw(){
   /* 明細 */
   $('listTitle').textContent=`申請明細　${list.length} 筆`;
   $('list').innerHTML=list.length?list.map(r=>{
-    const bg=cvar(STORES[r.store].c),tx=cvar(STORES[r.store].t);
+    const st=storeOf(r);
+    const bg=cvar(STORES[st].c),tx=cvar(STORES[st].t);
     const s=parse(r.from),e=parse(r.to),f=d=>`${d.getMonth()+1}/${d.getDate()}`;
     return `<div class="item" style="border-left-color:${bg}">
-      <span class="st" style="background:${bg};color:${tx}">${r.store}</span>
+      <span class="st" style="background:${bg};color:${tx}">${st}</span>
       <span class="nm">${r.name}</span>
       <span class="rg">${f(s)} – ${f(e)}　${days(r.from,r.to)}天
         ${r.note?`<small>${r.note}</small>`:''}</span>
