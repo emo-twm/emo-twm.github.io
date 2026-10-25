@@ -26,7 +26,7 @@ body{font-family:'Noto Sans TC',sans-serif;background:#f5f5f3;min-height:100vh}
 .btn-danger:hover{background:#fee2e2}
 .btn-success{background:#f0fdf4;border-color:#86efac;color:#16a34a}
 .err{color:#dc2626;font-size:13px;margin-top:.5rem;text-align:center}
-.navbar{background:#2c2c2a;padding:0 1.5rem;display:flex;align-items:center;height:52px;gap:4px}
+.navbar{background:#2c2c2a;padding:0 1.5rem;display:flex;align-items:center;height:52px;gap:4px;overflow-x:auto}
 .navbar-brand{color:#fff;font-weight:700;font-size:15px;margin-right:1rem;white-space:nowrap}
 .nav-tab{padding:6px 14px;border-radius:8px;font-size:13px;cursor:pointer;background:none;border:none;color:rgba(255,255,255,.6);transition:all .15s;white-space:nowrap}
 .nav-tab:hover{color:#fff;background:rgba(255,255,255,.1)}
@@ -64,6 +64,32 @@ tr:hover td{background:#fafaf8}
 .modal-title{font-size:16px;font-weight:700;margin-bottom:1rem;color:#2c2c2a}
 .modal-footer{display:flex;gap:8px;margin-top:1.25rem;justify-content:flex-end}
 .stock-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.panel{background:#fff;border-radius:12px;padding:1.25rem;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:1.25rem}
+.panel-title{font-size:15px;font-weight:700;color:#2c2c2a;margin-bottom:.75rem}
+.hq-th{background:#2c2c2a;color:#fff;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600}
+.hq-td{background:#f3f2ee;font-weight:700}
+.dist-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.dist-cell{border-radius:10px;padding:10px 12px}
+.dist-cell .form-input{margin-top:6px;background:#fff}
+.dist-now{font-size:12px;opacity:.85}
+.dist-sum{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:1rem;font-size:14px;color:#2c2c2a}
+.dist-sum b{font-size:18px}
+.warn{color:#dc2626;font-weight:700}
+.alert-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.alert-box{border:1px solid #eee;border-radius:10px;padding:12px;max-height:280px;overflow-y:auto}
+.alert-box-title{font-size:13px;font-weight:700;margin-bottom:8px}
+.alert-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed #eee;font-size:13px}
+.alert-item:last-child{border-bottom:none}
+.alert-empty{font-size:13px;color:#bbb;padding:6px 0}
+.mini-badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:20px;font-weight:600;margin:1px 2px 1px 0}
+.count-input{width:90px;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:15px;text-align:right}
+.count-input.filled{border-color:#2c2c2a;background:#fffbea}
+.diff-pos{color:#16a34a;font-weight:600}
+.diff-neg{color:#dc2626;font-weight:600}
+.row-cancel td{color:#bbb;text-decoration:line-through}
+.row-cancel td:last-child{text-decoration:none}
+.hint{font-size:12px;color:#999;line-height:1.6}
+textarea.form-input{font-size:13px;min-height:120px;font-family:inherit}
 .sig-img{width:100px;height:45px;border:1px solid #eee;border-radius:6px;object-fit:contain}
 .change-pos{color:#16a34a;font-weight:600}
 .change-neg{color:#dc2626;font-weight:600}
@@ -80,7 +106,7 @@ tr:hover td{background:#fafaf8}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, doc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, doc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, setDoc, runTransaction, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB0z4t9S2mRdQZ9Q6kExa3SuFgjNZmskSw",
@@ -109,6 +135,43 @@ const STORE_COLORS = {
   '仁雄':{bg:'#CECBF6',text:'#3C3489'},
   '凱旋':{bg:'#F4C0D1',text:'#72243E'},
 };
+
+// ===== 總部庫存 =====
+const HQ = '總部';
+const ALL_LOCS = [HQ, ...STORES];
+const LOC_COLORS = {...STORE_COLORS, [HQ]:{bg:'#2c2c2a',text:'#ffffff'}};
+const ALERT_STORE_DEFAULT = 2;   // 門市剩這個數量以下 → 提醒配發
+const ALERT_HQ_DEFAULT = 5;      // 總部剩這個數量以下 → 提醒進貨
+function sv(g,loc){ return (g && g.stock && g.stock[loc]) || 0; }
+function hasHq(g){ return !!(g && g.stock && typeof g.stock[HQ]==='number'); }
+function storeSum(g){ return STORES.reduce((a,s)=>a+sv(g,s),0); }
+function alertStoreOf(g){ return Number.isFinite(g.alertStore)?g.alertStore:ALERT_STORE_DEFAULT; }
+function alertHqOf(g){ return Number.isFinite(g.alertHq)?g.alertHq:ALERT_HQ_DEFAULT; }
+function localDate(){ return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'}); }
+function opName(){ return state.currentUser?.name||'管理員'; }
+function esc(t){ return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function locBadge(loc){
+  const c=LOC_COLORS[loc];
+  return c?`<span class="store-badge" style="background:${c.bg};color:${c.text}">${loc===HQ?HQ:loc+'店'}</span>`:esc(loc||'');
+}
+function giftLabel(g){ return (inZone(g,ZONE_PRE)?'🍎 預購禮｜':'')+g.name; }
+function sortedGifts(list){ return [...list].sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant')); }
+function restockAlerts(){
+  const toSend=[], toBuy=[];
+  state.gifts.filter(g=>!g.noRestock).forEach(g=>{
+    const hq=sv(g,HQ);
+    const low=STORES.filter(s=>sv(g,s)<=alertStoreOf(g));
+    if(hq>0 && low.length) toSend.push({g,low,hq});
+    if(hasHq(g) && hq<=alertHqOf(g)) toBuy.push({g,hq});
+  });
+  toSend.sort((a,b)=>b.low.length-a.low.length);
+  toBuy.sort((a,b)=>a.hq-b.hq);
+  return {toSend,toBuy};
+}
+function errMsg(err){ return err && err.code ? '操作失敗，請重新整理後再試一次（錯誤代碼 '+err.code+'）' : (err?.message||'操作失敗'); }
+const DRAFT_KEY='emo-hq-count-draft';
+function loadDraft(){ try{ return JSON.parse(localStorage.getItem(DRAFT_KEY)||'{}')||{}; }catch(e){ return {}; } }
+function saveDraft(){ try{ localStorage.setItem(DRAFT_KEY, JSON.stringify(state.countDraft)); }catch(e){} }
 
 const ZONE_PRE = 'iphone18';
 const ZONE_PRE_LABEL = '🍎 預購禮';
@@ -167,6 +230,14 @@ let state = {
   gifts: [],
   orders: [],
   inventoryHistory: [],
+  distributions: [],
+  distError: '',
+  dist: {gid:'', qty:{}, note:''},
+  distFilterStore: '',
+  distFilterDate: '',
+  countDraft: loadDraft(),
+  countZone: '',
+  countPaste: false,
   users: [...DEFAULT_USERS],
   loading: true,
 };
@@ -174,7 +245,7 @@ let state = {
 let loadCount = 0;
 function checkLoaded() {
   loadCount++;
-  if(loadCount >= 3) { state.loading = false; render(); }
+  if(loadCount >= 4) { state.loading = false; render(); }
   else render();
 }
 onSnapshot(collection(db, 'gifts'), snap => {
@@ -189,14 +260,21 @@ onSnapshot(collection(db, 'inventoryHistory'), snap => {
   state.inventoryHistory = snap.docs.map(d => ({id:d.id,...d.data()})).sort((a,b)=>b.timestamp?.localeCompare(a.timestamp||'')||0);
   if(state.loading) checkLoaded(); else render();
 });
+onSnapshot(collection(db, 'distributions'), snap => {
+  state.distributions = snap.docs.map(d => ({id:d.id,...d.data()})).sort((a,b)=>b.timestamp?.localeCompare(a.timestamp||'')||0);
+  state.distError = '';
+  if(state.loading) checkLoaded(); else render();
+}, err => { state.distError = errMsg(err); if(state.loading) checkLoaded(); else render(); });
 setTimeout(()=>{ if(state.loading){ state.loading=false; render(); } }, 5000);
 
 function render() {
   const app = document.getElementById('app');
   if(state.loading) { app.innerHTML = '<div class="loading"><div class="spinner"></div><br>連線中...</div>'; return; }
   if(!state.loggedIn) { app.innerHTML = renderLogin(); attachEvents(); return; }
+  const y = window.scrollY;
   app.innerHTML = renderAdmin();
   attachEvents();
+  window.scrollTo(0, y);
 }
 
 function renderLogin() {
@@ -222,6 +300,7 @@ function renderAdmin() {
     {id:'gifts',label:'贈品管理'},
     {id:'orders',label:'兌換紀錄'},
     {id:'inventory',label:'庫存紀錄'},
+    ...(isAdmin?[{id:'distribute',label:'總部配發'},{id:'count',label:'總部盤點'}]:[]),
     {id:'stores',label:'門市管理'},
     ...(isAdmin?[{id:'users',label:'帳號管理'}]:[])
   ];
@@ -236,6 +315,8 @@ function renderAdmin() {
       ${state.tab==='gifts'?renderGifts():''}
       ${state.tab==='orders'?renderOrders():''}
       ${state.tab==='inventory'?renderInventory():''}
+      ${state.tab==='distribute'&&isAdmin?renderDistribute():''}
+      ${state.tab==='count'&&isAdmin?renderCount():''}
       ${state.tab==='stores'?renderStores():''}
       ${state.tab==='users'&&isAdmin?renderUsers():''}
     </div>
@@ -246,13 +327,18 @@ function renderAdmin() {
 function renderDashboard() {
   const today = new Date().toISOString().slice(0,10);
   const todayOrders = state.orders.filter(o=>o.date===today).length;
-  const totalStock = state.gifts.reduce((a,g)=>a+STORES.reduce((b,s)=>b+(g.stock?.[s]||0),0),0);
+  const totalStock = state.gifts.reduce((a,g)=>a+storeSum(g),0);
+  const hqStock = state.gifts.reduce((a,g)=>a+sv(g,HQ),0);
+  const isAdmin = state.currentUser?.role === 'admin';
+  const al = restockAlerts();
   return `<div>
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-label">總兌換筆數</div><div class="stat-value">${state.orders.length}</div></div>
       <div class="stat-card"><div class="stat-label">今日兌換</div><div class="stat-value">${todayOrders}</div></div>
       <div class="stat-card"><div class="stat-label">贈品種類</div><div class="stat-value">${state.gifts.length}</div></div>
-      <div class="stat-card"><div class="stat-label">總庫存數</div><div class="stat-value">${totalStock}</div></div>
+      <div class="stat-card"><div class="stat-label">門市庫存</div><div class="stat-value">${totalStock}</div></div>
+      <div class="stat-card"><div class="stat-label">總部庫存</div><div class="stat-value">${hqStock}</div></div>
+      ${isAdmin?`<div class="stat-card" style="cursor:pointer" data-action="tab" data-tab="distribute"><div class="stat-label">補貨提醒</div><div class="stat-value" style="font-size:18px;margin-top:6px">待配發 ${al.toSend.length} 款<br><span style="color:${al.toBuy.length?'#dc2626':'#2c2c2a'}">總部偏低 ${al.toBuy.length} 款</span></div></div>`:''}
       <div class="stat-card" style="background:#1c1c1a"><div class="stat-label" style="color:#f5d67a">🍎 預購禮兌換</div><div class="stat-value" style="color:#fff">${state.orders.filter(o=>o.zone===ZONE_PRE).length}</div></div>
     </div>
     <div class="store-summary-grid">
@@ -318,7 +404,7 @@ function renderGifts() {
     ${paginationBar}
     <div class="table-wrap">
       <table>
-        <thead><tr><th>圖片</th><th>贈品名稱</th><th>專區</th><th>點數</th><th>價值</th>${STORES.map(s=>`<th>${s}</th>`).join('')}<th>操作</th></tr></thead>
+        <thead><tr><th>圖片</th><th>贈品名稱</th><th>專區</th><th>點數</th><th>價值</th><th><span class="hq-th">總部</span></th>${STORES.map(s=>`<th>${s}</th>`).join('')}<th>操作</th></tr></thead>
         <tbody>
           ${paged.map(g=>{
             const url=imgUrl(g.image);
@@ -328,6 +414,7 @@ function renderGifts() {
               <td style="min-width:150px">${zoneChips(g,true)}</td>
               <td><span class="badge-pts">${g.points}點</span></td>
               <td>${g.value}元</td>
+              <td class="hq-td">${hasHq(g)?sv(g,HQ):'<span style="color:#bbb;font-weight:400">未盤</span>'}</td>
               ${STORES.map(s=>`<td style="color:${(g.stock?.[s]||0)===0?'#dc2626':''};font-weight:${(g.stock?.[s]||0)===0?'600':''}">${g.stock?.[s]||0}</td>`).join('')}
               <td style="white-space:nowrap">
                 <button class="btn btn-sm" data-action="editGift" data-gid="${g.id}" style="margin-right:4px">編輯</button>
@@ -335,7 +422,7 @@ function renderGifts() {
               </td>
             </tr>`;
           }).join('')}
-          ${list.length===0?`<tr class="empty-row"><td colspan="${6+STORES.length}">尚無贈品，請新增</td></tr>`:''}
+          ${list.length===0?`<tr class="empty-row"><td colspan="${7+STORES.length}">尚無贈品，請新增</td></tr>`:''}
         </tbody>
       </table>
     </div>${pagination}
@@ -395,7 +482,7 @@ function renderInventory() {
         <tbody>
           ${state.inventoryHistory.map(h=>`<tr>
             <td>${h.date}</td>
-            <td><span class="store-badge" style="background:${STORE_COLORS[h.store]?.bg};color:${STORE_COLORS[h.store]?.text}">${h.store}店</span></td>
+            <td>${locBadge(h.store)}</td>
             <td>${h.giftName}</td>
             <td class="${h.change>0?'change-pos':'change-neg'}">${h.change>0?'+':''}${h.change}</td>
             <td><span class="tag">${h.reason}</span></td>
@@ -408,10 +495,155 @@ function renderInventory() {
   </div>`;
 }
 
+function renderDistribute() {
+  const d = state.dist;
+  const g = state.gifts.find(x=>x.id===d.gid);
+  const al = restockAlerts();
+  const fmtLow = (x)=>x.low.map(s=>`<span class="mini-badge" style="background:${STORE_COLORS[s].bg};color:${STORE_COLORS[s].text}">${s} ${sv(x.g,s)}</span>`).join('');
+  let recs = state.distributions;
+  if(state.distFilterStore) recs = recs.filter(r=>r.store===state.distFilterStore);
+  if(state.distFilterDate) recs = recs.filter(r=>r.date===state.distFilterDate);
+  const giftOpts = sortedGifts(state.gifts).map(x=>`<option value="${x.id}"${x.id===d.gid?' selected':''}>${esc(giftLabel(x))}（總部 ${sv(x,HQ)}）</option>`).join('');
+  return `<div>
+    <div class="section-title" style="margin-bottom:.75rem">總部配發</div>
+
+    <div class="panel">
+      <div class="panel-title">補貨提醒</div>
+      <div class="alert-grid">
+        <div class="alert-box">
+          <div class="alert-box-title">📦 建議配發（門市剩 ${ALERT_STORE_DEFAULT} 件以下、總部還有貨）</div>
+          ${al.toSend.length?al.toSend.map(x=>`<div class="alert-item"><div><div style="font-weight:600">${esc(x.g.name)}</div><div>${fmtLow(x)}</div></div><div style="text-align:right;white-space:nowrap"><div style="font-size:12px;color:#999">總部 ${x.hq}</div><button class="btn btn-sm" data-action="pickDistGift" data-gid="${x.g.id}">配發</button></div></div>`).join(''):'<div class="alert-empty">目前沒有需要配發的贈品</div>'}
+        </div>
+        <div class="alert-box">
+          <div class="alert-box-title">🛒 總部庫存偏低（剩 ${ALERT_HQ_DEFAULT} 件以下，需進貨）</div>
+          ${al.toBuy.length?al.toBuy.map(x=>`<div class="alert-item"><div style="font-weight:600">${esc(x.g.name)}</div><div class="${x.hq===0?'warn':''}" style="white-space:nowrap">總部 ${x.hq}｜門市 ${storeSum(x.g)}</div></div>`).join(''):'<div class="alert-empty">目前沒有總部庫存偏低的贈品</div>'}
+        </div>
+      </div>
+      <div class="hint" style="margin-top:8px">提醒門檻預設門市 ${ALERT_STORE_DEFAULT} 件、總部 ${ALERT_HQ_DEFAULT} 件，個別贈品可在「贈品管理 → 編輯」調整；停產或出清的贈品勾「不再補貨」就不會出現在提醒裡。總部還沒盤點過的贈品不會出現在進貨提醒。</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">新增配發</div>
+      <div class="form-group"><label class="form-label">贈品</label>
+        <select class="form-input" id="dist-gift"><option value="">請選擇贈品</option>${giftOpts}</select>
+      </div>
+      ${g?`
+      <div class="form-label">各門市配發數量（只填要配發的門市）</div>
+      <div class="dist-grid">
+        ${STORES.map(s=>{const c=STORE_COLORS[s];return `<div class="dist-cell" style="background:${c.bg};color:${c.text}">
+          <div style="font-weight:700">${s}店</div>
+          <div class="dist-now">目前 ${sv(g,s)} 件</div>
+          <input class="form-input dist-qty" data-store="${s}" type="number" min="0" inputmode="numeric" placeholder="0" value="${esc(d.qty[s]||'')}">
+        </div>`;}).join('')}
+      </div>
+      <div class="form-group" style="margin-top:12px"><label class="form-label">備註（選填）</label><input class="form-input" id="dist-note" value="${esc(d.note)}" placeholder="例：一樓上架後第一次配發"></div>
+      <div class="dist-sum">
+        <div>總部目前 <b>${sv(g,HQ)}</b> 件</div>
+        <div>本次配發 <b id="dist-total">0</b> 件</div>
+        <div>配發後總部剩 <b id="dist-after">${sv(g,HQ)}</b> 件</div>
+        <button class="btn btn-primary btn-sm" id="dist-btn" data-action="doDistribute" style="margin-left:auto">確認配發</button>
+      </div>
+      ${!hasHq(g)?'<div class="hint warn" style="margin-top:8px">這個贈品總部還沒盤點，請先到「總部盤點」填入數量</div>':''}
+      `:'<div class="hint">選好贈品後，會列出五家店目前的庫存，直接填要配發的數量</div>'}
+    </div>
+
+    <div class="section-header">
+      <div class="section-title">配發紀錄</div>
+    </div>
+    ${state.distError?`<div class="hint warn" style="margin-bottom:8px">配發紀錄讀取失敗：${esc(state.distError)}</div>`:''}
+    <div class="filter-bar">
+      <select class="filter-select" id="dfs"><option value="">全部門市</option>${STORES.map(s=>`<option${state.distFilterStore===s?' selected':''}>${s}</option>`).join('')}</select>
+      <input type="date" class="filter-select" id="dfd" value="${state.distFilterDate}">
+      <button class="btn btn-sm" data-action="clearDistFilter">清除篩選</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>贈品</th><th>門市</th><th>數量</th><th>操作人</th><th>備註</th><th>狀態</th></tr></thead>
+        <tbody>
+          ${recs.map(r=>`<tr class="${r.cancelled?'row-cancel':''}">
+            <td>${esc(r.date)}</td>
+            <td>${esc(r.giftName)}</td>
+            <td>${locBadge(r.store)}</td>
+            <td style="font-weight:600">${r.quantity}</td>
+            <td>${esc(r.operator)}</td>
+            <td>${esc(r.note||'')}</td>
+            <td style="white-space:nowrap">${r.cancelled?`<span class="tag">已撤銷（${esc(r.cancelledBy||'')}）</span>`:`<button class="btn btn-sm btn-danger" data-action="cancelDist" data-did="${r.id}">撤銷</button>`}</td>
+          </tr>`).join('')}
+          ${recs.length===0?'<tr class="empty-row"><td colspan="7">暫無配發紀錄</td></tr>':''}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function renderCount() {
+  let list = sortedGifts(state.gifts);
+  if(state.countZone==='untagged') list = list.filter(isUntagged);
+  else if(state.countZone) list = list.filter(g=>inZone(g,state.countZone));
+  const draft = state.countDraft;
+  const filledIds = Object.keys(draft).filter(id=>draft[id]!==''&&draft[id]!=null&&state.gifts.some(g=>g.id===id));
+  const filledSum = filledIds.reduce((a,id)=>a+(parseInt(draft[id])||0),0);
+  const diffCell = (g)=>{
+    const v=draft[g.id]; if(v===''||v==null) return '';
+    const n=parseInt(v); if(isNaN(n)) return '<span class="warn">數字錯誤</span>';
+    const dlt=n-sv(g,HQ);
+    return dlt===0?'<span style="color:#999">相同</span>':`<span class="${dlt>0?'diff-pos':'diff-neg'}">${dlt>0?'+':''}${dlt}</span>`;
+  };
+  return `<div>
+    <div class="section-header">
+      <div class="section-title">總部盤點</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm" data-action="downloadCountSheet">下載盤點表</button>
+        <button class="btn btn-sm" data-action="togglePaste">${state.countPaste?'收起貼上':'從 Excel 貼上'}</button>
+      </div>
+    </div>
+    <div class="hint" style="margin-bottom:.75rem">盤點完的數字填在「盤點數量」，填好的會先暫存在這台電腦，全部確認後按「寫入總部庫存」一次更新。沒填的贈品不會被更動。</div>
+    ${state.countPaste?`<div class="panel">
+      <div class="panel-title">從 Excel 貼上</div>
+      <div class="hint" style="margin-bottom:8px">用「下載盤點表」的檔案填好數量後，整份選起來複製貼在下面（第一欄品名、第二欄數量，第三欄編號請保留不要改）。</div>
+      <textarea class="form-input" id="count-paste" placeholder="品名　數量　編號"></textarea>
+      <div style="margin-top:8px;text-align:right"><button class="btn btn-primary btn-sm" data-action="applyPaste">填入下方表格</button></div>
+    </div>`:''}
+    <div class="filter-bar">
+      <select class="filter-select" id="cz">
+        <option value="">全部專區</option>
+        ${ZONES.map(z=>`<option value="${z.id}"${state.countZone===z.id?' selected':''}>${z.label}</option>`).join('')}
+        <option value="untagged"${state.countZone==='untagged'?' selected':''}>未分類</option>
+      </select>
+      <input class="filter-select" id="count-search" placeholder="搜尋贈品名稱" style="min-width:180px">
+      <span style="font-size:13px;color:#2c2c2a;align-self:center">已填 <b>${filledIds.length}</b> 項，合計 <b>${filledSum}</b> 件</span>
+      <button class="btn btn-sm" data-action="clearCount" style="margin-left:auto">清除已填</button>
+      <button class="btn btn-primary btn-sm" data-action="doCount" id="count-btn">寫入總部庫存</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>圖片</th><th>贈品</th><th>目前總部</th><th>盤點數量</th><th>差異</th><th>門市合計</th><th>上次盤點</th></tr></thead>
+        <tbody>
+          ${list.map(g=>{const url=imgUrl((g.image||'').split(',')[0].trim());const v=draft[g.id];return `<tr class="count-row" data-name="${esc((g.name||'').toLowerCase())}">
+            <td>${url?`<img src="${url}" style="width:40px;height:40px;object-fit:cover;border-radius:8px;border:1px solid #eee" onerror="this.style.display='none'">`:'🎁'}</td>
+            <td style="font-weight:600">${esc(g.name)} ${inZone(g,ZONE_PRE)?'<span class="badge-pre">🍎 預購禮</span>':''}</td>
+            <td class="hq-td">${hasHq(g)?sv(g,HQ):'<span style="color:#bbb;font-weight:400">未盤</span>'}</td>
+            <td><input class="count-input${v!==''&&v!=null?' filled':''}" data-gid="${g.id}" type="number" min="0" inputmode="numeric" value="${esc(v??'')}"></td>
+            <td id="cd-${g.id}">${diffCell(g)}</td>
+            <td>${storeSum(g)}</td>
+            <td style="color:#999">${esc(g.hqCountedAt||'—')}</td>
+          </tr>`;}).join('')}
+          ${list.length===0?'<tr class="empty-row"><td colspan="7">沒有符合的贈品</td></tr>':''}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
 function renderStores() {
   return `<div>
     <div class="section-title" style="margin-bottom:1rem">門市管理</div>
     <div class="store-summary-grid">
+      <div class="store-sum-card" style="background:#2c2c2a">
+        <div style="font-size:16px;font-weight:700;color:#fff">總部</div>
+        <div style="font-size:13px;color:#ddd;margin-top:8px">已盤點：${state.gifts.filter(hasHq).length} / ${state.gifts.length} 款</div>
+        <div style="font-size:13px;color:#ddd">總庫存：${state.gifts.reduce((a,g)=>a+sv(g,HQ),0)} 件</div>
+      </div>
       ${STORES.map(s=>{
         const c=STORE_COLORS[s];
         const cnt=state.orders.filter(o=>o.store===s).length;
@@ -426,13 +658,13 @@ function renderStores() {
     <div class="section-title" style="margin-bottom:.75rem">各贈品庫存明細</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>贈品</th>${STORES.map(s=>`<th><span class="store-badge" style="background:${STORE_COLORS[s].bg};color:${STORE_COLORS[s].text}">${s}</span></th>`).join('')}<th>合計</th></tr></thead>
+        <thead><tr><th>贈品</th><th><span class="hq-th">總部</span></th>${STORES.map(s=>`<th><span class="store-badge" style="background:${STORE_COLORS[s].bg};color:${STORE_COLORS[s].text}">${s}</span></th>`).join('')}<th>門市合計</th><th>全部合計</th></tr></thead>
         <tbody>
           ${state.gifts.map(g=>{
-            const total=STORES.reduce((a,s)=>a+(g.stock?.[s]||0),0);
-            return `<tr><td style="font-weight:600">${g.name} ${zoneChips(g,false)}</td>${STORES.map(s=>`<td style="color:${(g.stock?.[s]||0)===0?'#dc2626':''};">${g.stock?.[s]||0}</td>`).join('')}<td style="font-weight:600">${total}</td></tr>`;
+            const total=storeSum(g);
+            return `<tr><td style="font-weight:600">${g.name} ${zoneChips(g,false)}</td><td class="hq-td">${hasHq(g)?sv(g,HQ):'<span style="color:#bbb;font-weight:400">未盤</span>'}</td>${STORES.map(s=>`<td style="color:${(g.stock?.[s]||0)===0?'#dc2626':''};">${g.stock?.[s]||0}</td>`).join('')}<td style="font-weight:600">${total}</td><td style="font-weight:600">${total+sv(g,HQ)}</td></tr>`;
           }).join('')}
-          ${state.gifts.length===0?`<tr class="empty-row"><td colspan="${STORES.length+2}">尚無贈品</td></tr>`:''}
+          ${state.gifts.length===0?`<tr class="empty-row"><td colspan="${STORES.length+4}">尚無贈品</td></tr>`:''}
         </tbody>
       </table>
     </div>
@@ -464,6 +696,7 @@ function renderUsers() {
 function renderModal() {
   if(state.modal==='addGift'||state.modal==='editGift') {
     const g = state.editingGift || {name:'',points:10,value:300,stock:{}};
+    const isAdmin = state.currentUser?.role === 'admin';
     const url = imgUrl(g.image||'');
     return `<div class="modal-overlay">
       <div class="modal">
@@ -492,8 +725,16 @@ function renderModal() {
         <div class="form-group">
           <label class="form-label">各門市庫存</label>
           <div class="stock-grid">
-            ${STORES.map(s=>`<div><label class="form-label">${s}店</label><input class="form-input" id="m-s-${s}" type="number" value="${g.stock?.[s]||0}"></div>`).join('')}
+            ${ALL_LOCS.map(s=>`<div><label class="form-label">${s===HQ?'總部（客人看不到）':s+'店'}</label><input class="form-input" id="m-s-${s}" type="number" value="${g.stock?.[s]||0}" ${s===HQ&&!isAdmin?'disabled':''}></div>`).join('')}
           </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">補貨提醒</label>
+          <div class="stock-grid">
+            <div><label class="form-label">門市剩幾件以下提醒配發</label><input class="form-input" id="m-al-s" type="number" min="0" value="${alertStoreOf(g)}"></div>
+            <div><label class="form-label">總部剩幾件以下提醒進貨</label><input class="form-input" id="m-al-h" type="number" min="0" value="${alertHqOf(g)}"></div>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;margin-top:8px"><input type="checkbox" id="m-norestock" ${g.noRestock?'checked':''}> 不再補貨（停產或出清，不出現在補貨提醒）</label>
         </div>
         <div class="modal-footer">
           <button class="btn btn-sm" data-action="closeModal">取消</button>
@@ -507,10 +748,10 @@ function renderModal() {
       <div class="modal">
         <div class="modal-title">調整庫存</div>
         <div class="form-group"><label class="form-label">門市</label>
-          <select class="form-input" id="adj-store">${STORES.map(s=>`<option>${s}</option>`).join('')}</select>
+          <select class="form-input" id="adj-store">${STORES.map(s=>`<option value="${s}">${s}</option>`).join('')}${state.currentUser?.role==='admin'?`<option value="${HQ}">總部</option>`:''}</select>
         </div>
         <div class="form-group"><label class="form-label">贈品</label>
-          <select class="form-input" id="adj-gift">${state.gifts.map(g=>`<option value="${g.id}">${inZone(g,ZONE_PRE)?'🍎 預購禮｜':''}${g.name}</option>`).join('')}</select>
+          <select class="form-input" id="adj-gift">${sortedGifts(state.gifts).map(g=>`<option value="${g.id}">${esc(giftLabel(g))}</option>`).join('')}</select>
         </div>
         <div class="form-group"><label class="form-label">異動數量（正數=補貨，負數=扣除）</label>
           <input class="form-input" id="adj-qty" type="number" value="0">
@@ -556,6 +797,34 @@ function attachEvents() {
   if(fs) fs.onchange = e => { state.filterStore = e.target.value; render(); };
   const fz = document.getElementById('fz');
   if(fz) fz.onchange = e => { state.filterZone = e.target.value; render(); };
+  const dg = document.getElementById('dist-gift');
+  if(dg) dg.onchange = e => { state.dist = {gid:e.target.value, qty:{}, note:''}; render(); };
+  document.querySelectorAll('.dist-qty').forEach(el => { el.oninput = e => { state.dist.qty[e.target.dataset.store] = e.target.value; updateDistPreview(); }; });
+  const dn = document.getElementById('dist-note');
+  if(dn) dn.oninput = e => { state.dist.note = e.target.value; };
+  if(document.getElementById('dist-btn')) updateDistPreview();
+  const dfs = document.getElementById('dfs');
+  if(dfs) dfs.onchange = e => { state.distFilterStore = e.target.value; render(); };
+  const dfd = document.getElementById('dfd');
+  if(dfd) dfd.onchange = e => { state.distFilterDate = e.target.value; render(); };
+  const cz = document.getElementById('cz');
+  if(cz) cz.onchange = e => { state.countZone = e.target.value; render(); };
+  const cs = document.getElementById('count-search');
+  if(cs) cs.oninput = e => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('.count-row').forEach(r => { r.style.display = !q || r.dataset.name.includes(q) ? '' : 'none'; });
+  };
+  document.querySelectorAll('.count-input').forEach(el => {
+    el.oninput = e => {
+      const gid = e.target.dataset.gid;
+      state.countDraft[gid] = e.target.value; saveDraft();
+      e.target.classList.toggle('filled', e.target.value!=='');
+      const g = state.gifts.find(x=>x.id===gid); const cell = document.getElementById('cd-'+gid);
+      if(cell && g){ const v=e.target.value; const n=parseInt(v);
+        cell.innerHTML = v===''?'':isNaN(n)?'<span class="warn">數字錯誤</span>':(n-sv(g,HQ))===0?'<span style="color:#999">相同</span>':`<span class="${n-sv(g,HQ)>0?'diff-pos':'diff-neg'}">${n-sv(g,HQ)>0?'+':''}${n-sv(g,HQ)}</span>`; }
+    };
+    el.onkeydown = e => { if(e.key==='Enter'){ e.preventDefault(); const all=[...document.querySelectorAll('.count-input')].filter(x=>x.closest('tr').style.display!=='none'); const i=all.indexOf(e.target); if(all[i+1]) all[i+1].focus(); } };
+  });
   const gfz = document.getElementById('gfz');
   if(gfz) gfz.onchange = e => { state.giftFilterZone = e.target.value; state.giftPage = 1; render(); };
   const lp = document.getElementById('lp');
@@ -568,6 +837,153 @@ function attachEvents() {
       wrap.innerHTML = '<img src="'+previewUrl+'" style="width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid #eee" onerror="this.style.display=\'none\'">';
     }
   };
+}
+
+function updateDistPreview(){
+  const g = state.gifts.find(x=>x.id===state.dist.gid); if(!g) return;
+  const total = STORES.reduce((a,s)=>a+(parseInt(state.dist.qty[s])||0),0);
+  const after = sv(g,HQ) - total;
+  const t = document.getElementById('dist-total'), a = document.getElementById('dist-after');
+  if(t) t.textContent = total;
+  if(a){ a.textContent = after; a.className = after<0?'warn':''; }
+}
+
+async function doDistribute(){
+  const d = state.dist;
+  const g = state.gifts.find(x=>x.id===d.gid);
+  if(!g){ alert('請先選擇贈品'); return; }
+  const raw = STORES.map(s=>({store:s, v:(d.qty[s]??'').toString().trim()})).filter(x=>x.v!=='');
+  if(raw.some(x=>!/^\d+$/.test(x.v))){ alert('數量只能填 0 以上的整數'); return; }
+  const items = raw.map(x=>({store:x.store, qty:parseInt(x.v)})).filter(x=>x.qty>0);
+  if(!items.length){ alert('請至少填一家門市的配發數量'); return; }
+  const total = items.reduce((a,x)=>a+x.qty,0);
+  if(total > sv(g,HQ)){ alert(`總部只有 ${sv(g,HQ)} 件，不夠配發 ${total} 件`); return; }
+  if(!confirm(`確定從總部配發「${g.name}」共 ${total} 件？\n\n`+items.map(x=>`${x.store}店　${x.qty} 件`).join('\n'))) return;
+  const btn = document.getElementById('dist-btn'); if(btn){ btn.disabled=true; btn.textContent='處理中...'; }
+  try{
+    const note = (d.note||'').trim();
+    await runTransaction(db, async tx => {
+      const ref = doc(db,'gifts',g.id);
+      const snap = await tx.get(ref);
+      if(!snap.exists()) throw new Error('找不到這個贈品，可能已被刪除');
+      const data = snap.data(); const st = data.stock||{};
+      const hq = st[HQ]||0;
+      if(hq < total) throw new Error(`總部庫存剛剛變成 ${hq} 件，不夠配發 ${total} 件`);
+      const upd = {['stock.'+HQ]: hq-total};
+      items.forEach(x=>{ upd['stock.'+x.store] = (st[x.store]||0) + x.qty; });
+      tx.update(ref, upd);
+      const date = localDate(), ts = new Date().toISOString(), op = opName(), giftName = data.name||g.name;
+      const batchId = ts+'-'+Math.random().toString(36).slice(2,7);
+      items.forEach(x=>{
+        tx.set(doc(collection(db,'distributions')), {date,timestamp:ts,giftId:g.id,giftName,store:x.store,quantity:x.qty,operator:op,note,batchId,cancelled:false});
+        tx.set(doc(collection(db,'inventoryHistory')), {date,timestamp:ts,store:x.store,giftName,change:x.qty,reason:'總部配發',operator:op});
+      });
+      tx.set(doc(collection(db,'inventoryHistory')), {date,timestamp:ts,store:HQ,giftName,change:-total,reason:'配發出庫',operator:op});
+    });
+    state.dist = {gid:g.id, qty:{}, note:''};
+    render();
+    alert(`配發完成：${g.name} 共 ${total} 件`);
+  }catch(err){
+    alert(errMsg(err));
+    if(btn){ btn.disabled=false; btn.textContent='確認配發'; }
+  }
+}
+
+async function cancelDist(id){
+  const r = state.distributions.find(x=>x.id===id); if(!r || r.cancelled) return;
+  if(!confirm(`確定撤銷這筆配發？\n\n${r.giftName}　${r.store}店 ${r.quantity} 件\n會從${r.store}店扣回，加回總部`)) return;
+  try{
+    await runTransaction(db, async tx => {
+      const dref = doc(db,'distributions',id);
+      const dsnap = await tx.get(dref);
+      if(!dsnap.exists() || dsnap.data().cancelled) throw new Error('這筆配發已經撤銷過了');
+      const gref = doc(db,'gifts',r.giftId);
+      const gsnap = await tx.get(gref);
+      if(!gsnap.exists()) throw new Error('這個贈品已被刪除，無法撤銷，請改用「庫存紀錄 → 調整庫存」');
+      const st = gsnap.data().stock||{}; const cur = st[r.store]||0;
+      if(cur < r.quantity) throw new Error(`${r.store}店目前只剩 ${cur} 件（可能已經兌換出去），無法整筆退回，請改用「庫存紀錄 → 調整庫存」`);
+      tx.update(gref, {['stock.'+r.store]: cur-r.quantity, ['stock.'+HQ]: (st[HQ]||0)+r.quantity});
+      const date = localDate(), ts = new Date().toISOString(), op = opName();
+      tx.update(dref, {cancelled:true, cancelledBy:op, cancelledAt:ts});
+      tx.set(doc(collection(db,'inventoryHistory')), {date,timestamp:ts,store:r.store,giftName:r.giftName,change:-r.quantity,reason:'撤銷配發',operator:op});
+      tx.set(doc(collection(db,'inventoryHistory')), {date,timestamp:ts,store:HQ,giftName:r.giftName,change:r.quantity,reason:'撤銷配發',operator:op});
+    });
+  }catch(err){ alert(errMsg(err)); }
+}
+
+function downloadCountSheet(){
+  const q = v => '"'+String(v??'').replace(/"/g,'""')+'"';
+  const rows = [['品名','盤點數量','編號（勿改）'], ...sortedGifts(state.gifts).map(g=>[g.name,'',g.id])];
+  const csv = '﻿' + rows.map(r=>r.map(q).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download = `總部盤點表_${localDate()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function applyPaste(){
+  const txt = document.getElementById('count-paste')?.value || '';
+  const norm = t => (t||'').replace(/\s+/g,'').toLowerCase();
+  const byName = {};
+  state.gifts.forEach(g=>{ const k=norm(g.name); (byName[k]=byName[k]||[]).push(g); });
+  let ok=0; const notFound=[], dup=[], bad=[];
+  txt.split(/\r?\n/).forEach(line=>{
+    if(!line.trim()) return;
+    const cols = line.split('\t').length>1 ? line.split('\t') : line.split(',');
+    const name = (cols[0]||'').trim().replace(/^"|"$/g,'');
+    const qv = (cols[1]||'').trim().replace(/^"|"$/g,'');
+    const id = (cols[2]||'').trim().replace(/^"|"$/g,'');
+    if(!name || name==='品名') return;
+    if(qv==='') return;
+    if(!/^\d+$/.test(qv)){ bad.push(name); return; }
+    let g = id && state.gifts.find(x=>x.id===id);
+    if(!g){
+      const m = byName[norm(name)]||[];
+      if(m.length===1) g=m[0];
+      else if(m.length>1){ dup.push(name); return; }
+      else { notFound.push(name); return; }
+    }
+    state.countDraft[g.id] = qv; ok++;
+  });
+  saveDraft();
+  state.countPaste = false; render();
+  let msg = `已填入 ${ok} 項`;
+  if(notFound.length) msg += `\n\n找不到這些品名（請手動填）：\n`+notFound.join('\n');
+  if(dup.length) msg += `\n\n有同名贈品無法判斷（請手動填）：\n`+dup.join('\n');
+  if(bad.length) msg += `\n\n數量不是整數：\n`+bad.join('\n');
+  alert(msg);
+}
+
+async function doCount(){
+  const entries = Object.entries(state.countDraft).filter(([id,v])=>v!==''&&v!=null);
+  const items = [];
+  for(const [id,v] of entries){
+    const g = state.gifts.find(x=>x.id===id); if(!g) continue;
+    if(!/^\d+$/.test(String(v).trim())){ alert(`「${g.name}」的數量不是 0 以上的整數，請修正`); return; }
+    items.push({g, n:parseInt(v), old:sv(g,HQ)});
+  }
+  if(!items.length){ alert('還沒有填任何盤點數量'); return; }
+  const changed = items.filter(x=>x.n!==x.old);
+  const sum = items.reduce((a,x)=>a+x.n,0);
+  if(!confirm(`確定寫入總部庫存？\n\n共 ${items.length} 項，總部合計 ${sum} 件\n其中 ${changed.length} 項數字有變動\n\n沒填的贈品不會更動`)) return;
+  const btn = document.getElementById('count-btn'); if(btn){ btn.disabled=true; btn.textContent='寫入中...'; }
+  try{
+    const date = localDate(), ts = new Date().toISOString(), op = opName();
+    for(let i=0;i<items.length;i+=200){
+      const batch = writeBatch(db);
+      items.slice(i,i+200).forEach(x=>{
+        batch.update(doc(db,'gifts',x.g.id), {['stock.'+HQ]: x.n, hqCountedAt: date});
+        if(x.n!==x.old) batch.set(doc(collection(db,'inventoryHistory')), {date,timestamp:ts,store:HQ,giftName:x.g.name,change:x.n-x.old,reason:'總部盤點',operator:op});
+      });
+      await batch.commit();
+    }
+    state.countDraft = {}; saveDraft();
+    render();
+    alert(`已寫入 ${items.length} 項總部庫存`);
+  }catch(err){
+    alert(errMsg(err));
+    if(btn){ btn.disabled=false; btn.textContent='寫入總部庫存'; }
+  }
 }
 
 async function handleAction(e) {
@@ -609,15 +1025,23 @@ async function handleAction(e) {
     const pts=parseInt(document.getElementById('m-pts').value)||0;
     const val=parseInt(document.getElementById('m-val').value)||0;
     const stock={};
-    STORES.forEach(s=>{stock[s]=parseInt(document.getElementById('m-s-'+s).value)||0;});
+    ALL_LOCS.forEach(s=>{const el=document.getElementById('m-s-'+s); if(el && !el.disabled) stock[s]=parseInt(el.value)||0;});
+    const alS=parseInt(document.getElementById('m-al-s').value), alH=parseInt(document.getElementById('m-al-h').value);
+    const alertStore=Number.isFinite(alS)&&alS>=0?alS:ALERT_STORE_DEFAULT, alertHq=Number.isFinite(alH)&&alH>=0?alH:ALERT_HQ_DEFAULT;
+    const noRestock=!!document.getElementById('m-norestock')?.checked;
     if(!name){alert('請填寫贈品名稱');return;}
     const image = document.getElementById('m-img-url')?.value.trim() || state.editingGift?.image || '';
     const zones = [...document.querySelectorAll('.m-zone:checked')].map(c=>c.value);
     const zone = zones.includes(ZONE_PRE)?ZONE_PRE:'general';
     if(state.modal==='editGift'){
-      await updateDoc(doc(db,'gifts',state.editingGift.id),{name,points:pts,value:val,stock,image,zones,zone});
+      // 只寫入有改動的庫存欄位，避免蓋掉編輯期間門市剛兌換扣掉的數字
+      const orig=state.editingGift.stock||{};
+      const upd={name,points:pts,value:val,image,zones,zone,alertStore,alertHq,noRestock};
+      Object.keys(stock).forEach(s=>{ if(stock[s]!==(orig[s]||0)) upd['stock.'+s]=stock[s]; });
+      await updateDoc(doc(db,'gifts',state.editingGift.id),upd);
     } else {
-      await addDoc(collection(db,'gifts'),{name,points:pts,value:val,stock,image,zones,zone});
+      if(!stock[HQ]) delete stock[HQ];
+      await addDoc(collection(db,'gifts'),{name,points:pts,value:val,stock,image,zones,zone,alertStore,alertHq,noRestock});
     }
     state.modal=null;state.editingGift=null;render();
   }
@@ -631,20 +1055,34 @@ async function handleAction(e) {
     const qty=parseInt(document.getElementById('adj-qty').value)||0;
     const reason=document.getElementById('adj-reason').value;
     const g=state.gifts.find(x=>x.id===gid);
-    if(g){
-      const newStock={...g.stock};
-      newStock[store]=Math.max(0,(newStock[store]||0)+qty);
-      await updateDoc(doc(db,'gifts',gid),{stock:newStock});
-      const today=new Date().toISOString().slice(0,10);
-      await addDoc(collection(db,'inventoryHistory'),{
-        date:today,timestamp:new Date().toISOString(),
-        store,giftName:g.name,change:qty,reason,
-        operator:state.currentUser?.name||'管理員'
-      });
+    if(g && qty!==0){
+      try{
+        await runTransaction(db, async tx=>{
+          const ref=doc(db,'gifts',gid); const snap=await tx.get(ref);
+          if(!snap.exists()) throw new Error('找不到這個贈品');
+          const cur=(snap.data().stock||{})[store]||0;
+          const nv=Math.max(0,cur+qty);
+          tx.update(ref,{['stock.'+store]:nv});
+          tx.set(doc(collection(db,'inventoryHistory')),{
+            date:localDate(),timestamp:new Date().toISOString(),
+            store,giftName:g.name,change:nv-cur,reason,
+            operator:opName()
+          });
+        });
+      }catch(err){ alert(errMsg(err)); return; }
     }
     state.modal=null;render();
   }
   else if(action==='clearFilter'){state.filterStore='';state.filterDate='';state.filterZone='';render();}
+  else if(action==='pickDistGift'){ state.dist={gid:e.currentTarget.dataset.gid,qty:{},note:''}; render(); document.getElementById('dist-gift')?.scrollIntoView({behavior:'smooth',block:'center'}); }
+  else if(action==='doDistribute'){ await doDistribute(); }
+  else if(action==='cancelDist'){ await cancelDist(e.currentTarget.dataset.did); }
+  else if(action==='clearDistFilter'){ state.distFilterStore=''; state.distFilterDate=''; render(); }
+  else if(action==='downloadCountSheet'){ downloadCountSheet(); }
+  else if(action==='togglePaste'){ state.countPaste=!state.countPaste; render(); }
+  else if(action==='applyPaste'){ applyPaste(); }
+  else if(action==='clearCount'){ if(confirm('確定清除所有已填的盤點數量？')){ state.countDraft={}; saveDraft(); render(); } }
+  else if(action==='doCount'){ await doCount(); }
   else if(action==='openAddUser'){state.modal='addUser';render();}
   else if(action==='saveUser'){
     const un=document.getElementById('u-un').value.trim();

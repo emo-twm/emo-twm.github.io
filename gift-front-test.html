@@ -358,9 +358,8 @@ async function handleAction(e) {
     btn.disabled = true; btn.textContent = '處理中...';
     try {
       const giftRef = doc(db, 'gifts', state.selectedGift);
-      const newStock = {...gift.stock};
-      newStock[state.selectedStore] = Math.max(0, (newStock[state.selectedStore]||0) - state.selectedQty);
-      await updateDoc(giftRef, {stock: newStock});
+      const curStock = (gift.stock && gift.stock[state.selectedStore]) || 0;
+      await updateDoc(giftRef, {['stock.' + state.selectedStore]: Math.max(0, curStock - state.selectedQty)});
       await addDoc(collection(db, 'orders'), {
         store: state.selectedStore,
         giftId: state.selectedGift,
