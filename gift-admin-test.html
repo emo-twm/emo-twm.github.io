@@ -233,6 +233,7 @@ let state = {
   distributions: [],
   distError: '',
   dist: {gid:'', qty:{}, note:''},
+  stockIn: {gid:'', search:'', qty:'', note:'', msg:''},
   distFilterStore: '',
   distFilterDate: '',
   countDraft: loadDraft(),
@@ -272,9 +273,11 @@ function render() {
   if(state.loading) { app.innerHTML = '<div class="loading"><div class="spinner"></div><br>連線中...</div>'; return; }
   if(!state.loggedIn) { app.innerHTML = renderLogin(); attachEvents(); return; }
   const y = window.scrollY;
+  const fid = document.activeElement?.id;
   app.innerHTML = renderAdmin();
   attachEvents();
   window.scrollTo(0, y);
+  if(fid && !state.modal){ const f=document.getElementById(fid); if(f && f.tagName!=='BUTTON') f.focus(); }
 }
 
 function renderLogin() {
@@ -300,7 +303,7 @@ function renderAdmin() {
     {id:'gifts',label:'贈品管理'},
     {id:'orders',label:'兌換紀錄'},
     {id:'inventory',label:'庫存紀錄'},
-    ...(isAdmin?[{id:'distribute',label:'總部配發'},{id:'count',label:'總部盤點'}]:[]),
+    ...(isAdmin?[{id:'stockin',label:'總部入庫'},{id:'distribute',label:'總部配發'},{id:'count',label:'總部盤點'}]:[]),
     {id:'stores',label:'門市管理'},
     ...(isAdmin?[{id:'users',label:'帳號管理'}]:[])
   ];
@@ -315,6 +318,7 @@ function renderAdmin() {
       ${state.tab==='gifts'?renderGifts():''}
       ${state.tab==='orders'?renderOrders():''}
       ${state.tab==='inventory'?renderInventory():''}
+      ${state.tab==='stockin'&&isAdmin?renderStockIn():''}
       ${state.tab==='distribute'&&isAdmin?renderDistribute():''}
       ${state.tab==='count'&&isAdmin?renderCount():''}
       ${state.tab==='stores'?renderStores():''}
@@ -485,13 +489,61 @@ function renderInventory() {
             <td>${locBadge(h.store)}</td>
             <td>${h.giftName}</td>
             <td class="${h.change>0?'change-pos':'change-neg'}">${h.change>0?'+':''}${h.change}</td>
-            <td><span class="tag">${h.reason}</span></td>
+            <td><span class="tag">${h.reason}</span>${h.note?` <span style="font-size:12px;color:#999">${esc(h.note)}</span>`:''}</td>
             <td>${h.operator}</td>
           </tr>`).join('')}
           ${state.inventoryHistory.length===0?`<tr class="empty-row"><td colspan="6">暫無紀錄</td></tr>`:''}
         </tbody>
       </table>
     </div>
+  </div>`;
+}
+
+function stockInOptions(q){
+  const k = (q||'').replace(/\s+/g,'').toLowerCase();
+  const list = sortedGifts(state.gifts).filter(g=>!k || (g.name||'').replace(/\s+/g,'').toLowerCase().includes(k));
+  return list.map(g=>`<option value="${g.id}"${g.id===state.stockIn.gid?' selected':''}>${esc(giftLabel(g))}（總部 ${hasHq(g)?sv(g,HQ):'未盤'}）</option>`).join('')
+    || '<option value="" disabled>找不到符合的贈品</option>';
+}
+
+function renderStockIn() {
+  const si = state.stockIn;
+  const g = state.gifts.find(x=>x.id===si.gid);
+  const recent = state.inventoryHistory.filter(h=>h.reason==='進貨入庫').slice(0,30);
+  return `<div>
+    <div class="section-title" style="margin-bottom:.75rem">總部入庫</div>
+    <div class="panel">
+      <div class="form-group"><label class="form-label">1. 打字搜尋贈品（按 Enter 選第一個）</label>
+        <input class="form-input" id="si-search" placeholder="例如：毛巾、行李箱" value="${esc(si.search)}" autocomplete="off">
+      </div>
+      <div class="form-group"><label class="form-label">2. 點選贈品</label>
+        <select class="form-input" id="si-gift" size="7" style="height:auto">${stockInOptions(si.search)}</select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px">
+        <div class="form-group"><label class="form-label">3. 入庫數量</label>
+          <input class="form-input" id="si-qty" type="number" min="1" inputmode="numeric" placeholder="0" style="font-size:18px;font-weight:700" value="${esc(si.qty)}">
+        </div>
+        <div class="form-group"><label class="form-label">備註（選填）</label>
+          <input class="form-input" id="si-note" placeholder="例：阿里巴巴到貨" value="${esc(si.note)}">
+        </div>
+      </div>
+      <div class="dist-sum" style="margin-top:0">
+        <div id="si-info">${g?`<b style="font-size:15px">${esc(g.name)}</b>　總部目前 <b>${hasHq(g)?sv(g,HQ):0}</b> 件`:'<span class="hint">還沒選贈品</span>'}</div>
+        <button class="btn btn-primary btn-sm" id="si-btn" data-action="doStockIn" style="margin-left:auto">確認入庫</button>
+      </div>
+      ${si.msg?`<div style="margin-top:10px;color:#16a34a;font-weight:600">${esc(si.msg)}</div>`:''}
+    </div>
+    <div class="section-title" style="margin-bottom:.75rem">最近入庫紀錄</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>贈品</th><th>數量</th><th>備註</th><th>操作人</th></tr></thead>
+        <tbody>
+          ${recent.map(h=>`<tr><td>${esc(h.date)}</td><td>${esc(h.giftName)}</td><td class="change-pos">+${h.change}</td><td>${esc(h.note||'')}</td><td>${esc(h.operator)}</td></tr>`).join('')}
+          ${recent.length===0?'<tr class="empty-row"><td colspan="5">暫無入庫紀錄</td></tr>':''}
+        </tbody>
+      </table>
+    </div>
+    <div class="hint" style="margin-top:8px">入庫只會增加總部數量，門市數字不會變。入錯的話到「庫存紀錄 → 調整庫存」選總部填負數扣回。</div>
   </div>`;
 }
 
@@ -797,6 +849,26 @@ function attachEvents() {
   if(fs) fs.onchange = e => { state.filterStore = e.target.value; render(); };
   const fz = document.getElementById('fz');
   if(fz) fz.onchange = e => { state.filterZone = e.target.value; render(); };
+  const sis = document.getElementById('si-search');
+  const sig = document.getElementById('si-gift');
+  const siq = document.getElementById('si-qty');
+  const siInfo = () => {
+    const g = state.gifts.find(x=>x.id===state.stockIn.gid);
+    const el = document.getElementById('si-info');
+    if(el) el.innerHTML = g ? `<b style="font-size:15px">${esc(g.name)}</b>　總部目前 <b>${hasHq(g)?sv(g,HQ):0}</b> 件` : '<span class="hint">還沒選贈品</span>';
+  };
+  if(sis) {
+    sis.oninput = e => { state.stockIn.search = e.target.value; state.stockIn.msg=''; if(sig) sig.innerHTML = stockInOptions(e.target.value); };
+    sis.onkeydown = e => { if(e.key==='Enter'){ e.preventDefault(); const first=[...(sig?.options||[])].find(o=>o.value); if(first){ state.stockIn.gid=first.value; sig.value=first.value; siInfo(); siq?.focus(); } } };
+  }
+  if(sig) {
+    sig.onchange = e => { state.stockIn.gid = e.target.value; siInfo(); };
+    sig.ondblclick = () => siq?.focus();
+  }
+  if(siq) siq.oninput = e => { state.stockIn.qty = e.target.value; };
+  const sin = document.getElementById('si-note');
+  if(sin) sin.oninput = e => { state.stockIn.note = e.target.value; };
+  if(siq) siq.onkeydown = e => { if(e.key==='Enter'){ e.preventDefault(); document.getElementById('si-btn')?.click(); } };
   const dg = document.getElementById('dist-gift');
   if(dg) dg.onchange = e => { state.dist = {gid:e.target.value, qty:{}, note:''}; render(); };
   document.querySelectorAll('.dist-qty').forEach(el => { el.oninput = e => { state.dist.qty[e.target.dataset.store] = e.target.value; updateDistPreview(); }; });
@@ -846,6 +918,36 @@ function updateDistPreview(){
   const t = document.getElementById('dist-total'), a = document.getElementById('dist-after');
   if(t) t.textContent = total;
   if(a){ a.textContent = after; a.className = after<0?'warn':''; }
+}
+
+async function doStockIn(){
+  const g = state.gifts.find(x=>x.id===state.stockIn.gid);
+  if(!g){ alert('請先選擇贈品'); return; }
+  const v = (document.getElementById('si-qty')?.value||'').trim();
+  if(!/^\d+$/.test(v) || parseInt(v)===0){ alert('入庫數量請填 1 以上的整數'); return; }
+  const qty = parseInt(v);
+  const note = (document.getElementById('si-note')?.value||'').trim();
+  const btn = document.getElementById('si-btn'); if(btn){ btn.disabled=true; btn.textContent='處理中...'; }
+  try{
+    let after = 0;
+    await runTransaction(db, async tx => {
+      const ref = doc(db,'gifts',g.id); const snap = await tx.get(ref);
+      if(!snap.exists()) throw new Error('找不到這個贈品，可能已被刪除');
+      const cur = (snap.data().stock||{})[HQ]||0;
+      after = cur + qty;
+      tx.update(ref, {['stock.'+HQ]: after});
+      tx.set(doc(collection(db,'inventoryHistory')), {date:localDate(),timestamp:new Date().toISOString(),store:HQ,giftName:snap.data().name||g.name,change:qty,reason:'進貨入庫',note,operator:opName()});
+    });
+    state.stockIn.msg = `✓ ${g.name} 入庫 ${qty} 件，總部現在 ${after} 件`;
+    state.stockIn.search = '';
+    state.stockIn.gid = '';
+    state.stockIn.qty = '';
+    render();
+    const sEl = document.getElementById('si-search'); if(sEl) sEl.focus();
+  }catch(err){
+    alert(errMsg(err));
+    if(btn){ btn.disabled=false; btn.textContent='確認入庫'; }
+  }
 }
 
 async function doDistribute(){
@@ -1074,6 +1176,7 @@ async function handleAction(e) {
     state.modal=null;render();
   }
   else if(action==='clearFilter'){state.filterStore='';state.filterDate='';state.filterZone='';render();}
+  else if(action==='doStockIn'){ await doStockIn(); }
   else if(action==='pickDistGift'){ state.dist={gid:e.currentTarget.dataset.gid,qty:{},note:''}; render(); document.getElementById('dist-gift')?.scrollIntoView({behavior:'smooth',block:'center'}); }
   else if(action==='doDistribute'){ await doDistribute(); }
   else if(action==='cancelDist'){ await cancelDist(e.currentTarget.dataset.did); }
